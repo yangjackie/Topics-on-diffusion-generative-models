@@ -1,1 +1,106 @@
 \section{DDPM=Autoregressive VAE}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9152}}}
+
+In \cref{section:DDPM_1}, we had established an analogy for the diffusion generative model DDPM, in which we described it as the process of demolition followed by reconstruction. Based on this analogy, we have completed a particular form of the mathematical derivations for the theoretical foundation of DDPM. We also pointed out that, fundamentally, DDPM is not the traditional diffusion model, but more like a VAE. In fact, in the seminal paper for DDPM\cite{ho2020denoising}, it was derived based on the VAE framework. Therefore, in this section, we will reintroduce the DDPM diffusion model based on the framework of VAE.
+
+\subsection{Solving the problem step-wise}
+
+In the standard formulation of the VAE, \marginnote{\footnotesize{In the language of VAE,  $\bm{z}$ is usually referred to as the \textit{latent variable}.}} both the encoding and generative processes are completed in a single step:
+\begin{equation}
+    \label{eq:2.1}
+    \mbox{ENCODER: }\quad \bm{x}\to\bm{z};\quad\mbox{GENERATION: }\quad\bm{z}\to\bm{x}.
+\end{equation}
+In this case, we only need to deal with three data distributions: the \textbf{encoding distribution} $p(\bm{z}|\bm{x})$, the \textbf{generative distribution} $q(\bm{x}|\bm{z})$, and the prior distribution $q(\bm{z})$. The advantage behind such a formulation is its simplicity. There also exists a simple projective relationship between the sample $\bm{x}$ and the latent variable $\bm{z}$, such that we can train and obtain both the encoder and the decoder (generator) simultaneously. it also allows us to manipulate the data in the latent space. However, VAE also has its notable limitations. Since all three distributions are usually modelled as the normal distributions, it has resulted in the limited expressive capability of the VAE model. 
+
+To overcome this limitation, DDPM breaks these processes into multiple steps:
+\begin{align}
+    \mbox{ENCODER: }\quad&\bm{x}=\bm{x}_0\to\bm{x}_1\to\bm{x}_2\to\cdots\to\bm{x}_{T-1}\to\bm{x}_{T}=\bm{z}\nonumber\\
+    \mbox{DECODER: }\quad &\bm{z}=\bm{x}_{T}\to\bm{x}_{T-1}\to\bm{x}_{T-2}\to\cdots\to\bm{x}_1\to\bm{x}_{0}=\bm{x}.\label{eq:2.2}
+\end{align}
+In this way, every transition probability $p(\xt|\xtm)$ or $q(\xtm|\xt)$  is only responsible for making a small change to the sample by the model. One may ask, if both $p$ and $q$ are normal distributions, why this alternative model will work better than the single-stepped one [\cref{eq:2.1}]? This is because, \emph{Gaussian distributions work better in approximating small incremental changes}, which is similar to approximating a curve with linear relationship that will only work within a small region of $\Delta\bm{x}$. As such, theoretically, the formulation proposed in \cref{eq:2.2} is able to improve the performance of a single-shot VAE.
+
+\subsection{The joint KL Divergence}
+To arrive at a step-wise formulation for VAE, we have \textcolor{red}{$p(\xt|\xtm)$} for every encoding step and \textcolor{red}{$q(\xtm|\xt)$} for every generation step.
+\marginnote{\footnotesize{\textcolor{red}{In the following derivations, the convention behind VAE will be adopted, in which we will use $p$ for the transition probability of the forward (encoding) process and $q$ for the backward (decoding) process, which is \textbf{opposite} to the notations used in the DDPM literatures!}}} This allows us to write down the \textbf{joint probability distributions}:
+\begin{align}
+p(\bm{x}_{0},\bm{x}_1,\bm{x}_2,\ldots,\bm{x}_T)&=p(\bm{x}_T|\bm{x}_{T-1})\cdots p(\bm{x}_2|\bm{x}_1)p(\bm{x}_1|\bm{x}_0)\tilde{p}(\bm{x}_{0})\nonumber\\
+q(\bm{x}_{0},\bm{x}_1,\bm{x}_2,\ldots,\bm{x}_T)&=q(\bm{x}_0|\bm{x}_1)\cdots q(\bm{x}_{T-2}|\bm{x}_{T-1})q(\bm{x}_{T-1}|\bm{x}_{T})q(\bm{x}_T). \label{eq:2.3}
+\end{align}
+Here, $\bm{x}_0$ represents the input samples, thus $\tilde{p}(\bm{x}_0)$ represents the sample distribution, whereas $q(\bm{x}_T)$ is the prior distribution, as $\bm{x}_T$ is the final encoded sample. The rest probability distributions of the type $p(\xt|\xtm)$ and $q(\xtm|\xt)$ represent each small step in the encoding and generating processes, respectively.
+
+The simplest way to understand VAE, is to minimise the KL divergence between the joint probability distributions, which is equally applicable to DDPM:
+\begin{equation}
+    \label{eq:2.4}
+    D_{KL}(p\|q)=\int p(\bm{x}_T|\bm{x}_{T-1})\cdots p(\bm{x}_1|\bm{x}_0)\tilde{p}(\bm{x}_{0}) \log\frac{p(\bm{x}_T|\bm{x}_{T-1})\cdots p(\bm{x}_1|\bm{x}_0)\tilde{p}(\bm{x}_{0})}{q(\bm{x}_0|\bm{x}_1)\cdots q(\bm{x}_{T-1}|\bm{x}_{T})q(\bm{x}_T)}d\bm{x}_0\cdots d\bm{x}_T.
+\end{equation}
+This is, therefore, the optimisation target for DDPM. What is left is to consolidate the forms of $p(\xt|\xtm)$ and $q(\xtm|\xt)$ to simplify \cref{eq:2.4} further, making it possible to be computed numerically.
+
+\subsection{Divide-and-conquer}
+First of all, DDPM is only interested in the generating part of the process, therefore, in the encoder process, every step is modelled as a simple normal distribution:
+\begin{equation*}
+    p(\xt|\xtm)=\mathcal{N}(\xt;\alphat\xtm,\betat^2\bm{I}).\marginnote{\footnotesize{This is an alternative way of writing \cref{eq:1.3}}}
+\end{equation*}
+This is much simpler than the VAE,  the medium and variance of which are both learnt by a neural network. Here, the medium is basically $\xtm$ that is multiplied by a \emph{scalar} $\alphat$. Hence, DDPM has completely abandoned the capability to encode the data, and only established a generative model. The transition probability for the generating process $q(\xtm|\xt)$ has now been formulated as a learnable model $\mathcal{N}(\xtm;\muxt,\sigma_t^2\bm{I})$. Here, \textbf{$\alphat$, $\betat$ and $\sigma_t$ are all not learnables but parameterised.} Hence, $\muxt$ is the only trainable object in the entire diffusion model.
+
+Since $p$ is not parameterised, the integration in \cref{eq:2.4} that involves purely the $p$ distributions can be factored out as a constant. This makes \cref{eq:2.4} become equivalent to
+\begin{align}
+    &\quad -\int p(\bm{x}_T|\bm{x}_{T-1})\cdots p(\bm{x}_1|\bm{x}_0)\tilde{p}(\bm{x}_{0})  \underbrace{\textcolor{red}{\log[q(\bm{x}_0|\bm{x}_1)\cdots q(\bm{x}_{T-1}|\bm{x}_T)q(\bm{x}_{T})]}}_{\mbox{\textcolor{red}{make this into a summation}}}  d\bm{x}_0\cdots d\bm{x}_T \nonumber\\
+    &=-\int p(\bm{x}_T|\bm{x}_{T-1})\cdots p(\bm{x}_1|\bm{x}_0)\tilde{p}(\bm{x}_{0}) \textcolor{red}{\left[\log q(\bm{x}_T)+\sum_{t=1}^T\log q(\xtm|\xt)\right]}  d\bm{x}_0\cdots d\bm{x}_T. \label{eq:2.5}
+\end{align}
+Since $q(\bm{x}_T)$ is usually modelled as a normal distribution, it is also parameter-free. As such, we only need to compute \emph{every term} of the form
+\begin{align}
+\marginnote{\footnotesize{\textcolor{red}{This integral ismaximally dependent up to $\xt$, so all the integrations from $\bm{x}_{t+1}$ to $\bm{x}_T$ gives unity, allowing us to remove some terms involving $p$.}}}
+    &\quad -\int \underbrace{p(\bm{x}_T|\bm{x}_{T-1})\cdots p(\bm{x}_1|\bm{x}_0)\tilde{p}(\bm{x}_{0})}_{T+1\mbox{ terms}} \textcolor{red}{\log q(\xtm|\xt)} d\bm{x}_0\cdots d\bm{x}_T\nonumber\\
+    &=-\int \underbrace{p(\xt|\xtm)\cdots p(\bm{x}_1|\bm{x}_0)\tilde{p}(\bm{x}_{0})}_{t+1\mbox{ terms}}\log q(\xtm|\xt)d\bm{x}_0\cdots d\bm{x}_{\textcolor{red}{t}}\nonumber\\
+\marginnote{\footnotesize{\textcolor{red}{Similarly, the integral is also independent from $x_1$, $\ldots$, $x_{t-2}$.}}}
+&=-\int p(\xt|\xtm)p(\xtm|\bm{x}_0)\tilde{p}(\bm{x}_{0})\log q(\xtm|\xt)d\bm{x}_0 d\bm{x}_{t-1}\bm{x}_t. 
+\end{align}
+
+\subsection{Reconstructing the diffusion model}
+What follows from here is basically the same as discussed in \cref{chap_1:rebuild}:
+\begin{myquote}
+\begin{enumerate}
+\item Remove all the constants that are irrelevant to the optimisation problem, this left us with the term $-\log q(\xtm|\xt)$ which gives the term $\frac{1}{2\sigma_t^2}\|\xtm-\muxt\|_2^2$ in the target function for optimisation.
+\item The transition probability $p(\xtm|\bm{x}_0)$ can be equivalently written as $\xtm=\alphatmbar\bm{x}_0+\betatmbar\bar{\bm{\varepsilon}}_{t-1}$, similarly $p(\xt|\xtm)$ implies $\xt=\alphat\xtm+\betat\et$, in which $\bar{\bm{\varepsilon}}_{t-1}$ and $\et\sim\mathcal{N}(0,\bm{I})$.
+\item From $\xtm=\frac{1}{\alphat}(\xt-\betat\et)$, it inspires us to parameterise $\muxt$ as $\muxt=\frac{1}{\alphat}(\xt-\betat\bm{\varepsilon}_\theta(\xt,t))$.
+\end{enumerate}
+\end{myquote}
+Equipped with these transformations, the target function for optimisation can be rewritten in the following form:\marginnote{\footnotesize{\textcolor{red}{This is equivalent to \cref{eq:1.11}.}}}
+\begin{equation}
+    \label{eq:2.7}
+    \frac{\betat^2}{\alphat^2\sigmat^2}\mathbb{E}_{\bar{\bm{\varepsilon}}_{t-1},\et\sim\normdist,\bm{x}_{0}\sim\tilde{p}(\bm{x}_{0})}\left[\left\| \et-\es (\alphatbar \bm{x}_0+\alphat\betatmbar\etm +\betat\et,t)  \right\|_2^2\right].
+\end{equation}
+This is followed by the trick of changing the variables applied in \cref{sect1:reduce_error}, which gives\marginnote{\footnotesize{\textcolor{red}{This is equivalent to \cref{eq:1.15}.}}}
+\begin{equation}
+    \label{eq:2.8}
+    \frac{\betat^4}{\alphat^2\sigmat^4}\mathbb{E}_{\bm{\varepsilon}\sim\normdist,\bm{x}_{0}\sim\tilde{p}(\bm{x}_{0})}\left[\left\| \et-\frac{\betatbar}{\betat}\es(\alphatbar\bm{x}_0 +\betatbar\bm{\varepsilon},t)  \right\|_2^2\right]
+\end{equation}
+This leads to the loss function for DDPM. \textbf{As tested in the original paper, the model performance is even better if we drop the coefficient $\frac{\betat^4}{\alphat^2\sigmat^4}$ in the numerical implementation. } The above derivation starts from the loss function for VAE and sequentially simplifies the multivariant integral [\cref{eq:2.5}]. Although the derivation is longer, it is logically tractable. In comparison to the original DDPM paper\cite{ho2020denoising}, where a conditional probability $q(\xtm|\xt,\x_0)$ was introduced which then split the terms that were subsequently cancelled out. This original derivation came somehow `out of the blue', which may not be easily understood by many readers.
+
+\subsection{Hyperparameter settings}
+
+Now we move on to discuss the choice of the hyperparameters $\alphat$, $\betat$ and $\sigmat$. For $p(\xt|\xtm)$, it is conventional to set $\alphat^2+\betat^2=1$, which already allows us to reduce the number of hyperparameters by half, and helps to simplify the expressions. This has already been discussed in \cref{section:DDPM_1}. From the superposition of normal distributions, we have the following formula one-shot sampling:
+\begin{equation}
+    \label{eq:2.9}
+    p(\xt|\x_0)=\int p(\xt|\xtm)\cdots p(\x_1|\x_0)d\xt d\xtm\cdots d\x_1=\mathcal{N}(\xt;\alphatbar\x_0,\betatbar^2\bm{I}),
+\end{equation}
+where $\alphatbar=\alpha_1\alpha_2\cdots\alphat$, and $\betatbar=\sqrt{1-\alphatbar^2}$.
+
+So what inspires us to set $\alphat^2+\betat^2=1$? The choice of $\mathcal{N}(\xt;\alphatbar\x_0,\betatbar^2\bm{I})$ means we have $\xt=\alphat\x_{t-1}+\betat\et$ with $\et\sim\normdist$, then it would require $\alphat^2+\betat^2=1$ based on the normalisation condition for the linear combinations of normal distributions.
+
+As mentioned before, we usually represent $q(\x_T)$ as a standard normal distribution $\mathcal{N}(\x_T;0,\bm{I})$, and the training goal is to minimise the KL divergence of the two joint probability distributions, i.e. $p=q$. This means that the marginal distributions should also equal each other:
+\begin{align}
+    q(\x_T)&=\int p(\x_T|\x_{T-1}) p(\x_{T-1}|\x_{T-2})\cdots p(\x_1|\x_0)\tilde{p}(\x_0)d\x_0 d\x_1 \cdots d\x_{T-1} \nonumber\\
+    &=\int p(\x_T|\x_0)\tilde{p}(\x_0) d\x_0. \label{eq:2.10}
+\end{align}
+In general, the sample distribution is arbitrary, such that the only way to make \cref{eq:2.10} hold is to equate $p(\x_T|\x_0)$ to become $q(\x_T)$ [Note that the integral in  \cref{eq:2.10} is independent of $\x_T$!]. \textbf{It means to evolve $\tilde{p}(\x_0)$ into a Gaussian distribution that is independent from $\x_0$.} Recall that $q(\x_T)\sim\mathcal{N}(\xt;\alphatbar\x_0,\betatbar^2\bm{I})$, this would require $\alphatbar \approx 0$ when $t\to T$. More discussions on the choice of $\alphat$ can be referred back to \cref{chap_1:rebuild}.
+
+For $\sigmat$, \marginnote{\footnotesize{\textcolor{red}{$\sigmat$ comes from the definition of $q(\xtm|\xt)$, which we formulated it as a learnable distribution $\mathcal{N}(\xtm;\muxt,\sigmat^2\bm{I})$, this is needed for the reverse sampling process.}}} in theory, different sample distributions $
+\tilde{p}(\x_0)$ will lead to a different optimised $\sigmat$. However, we do not really want to train the variance as an extra parameter. In this case, we can choose two special examples.
+\begin{myquote}
+    \begin{enumerate}
+        \item Assume there is only one training sample, $\x_{*}$. In this case, we have $\tilde{p}(\x_0)=\delta(\x-\x_{*})$, the Dirac distribution. This will give an optimum value of $\sigma_t=\betatmbar\betat/\betatbar$.
+        \item Assume $\tilde{p}(\x_0)\sim\normdist$, then the optimum $\sigmat=\betat$.
+    \end{enumerate}
+\end{myquote}
+Both choices lead to comparable performances in practice. The proofs of these results are rather complicated, which will be reserved for the discussions in the next section.
