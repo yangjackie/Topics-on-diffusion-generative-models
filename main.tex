@@ -51,7 +51,7 @@ floatfix,
 \usepackage[capitalise]{cleveref} % Nice reference scheme. use: \cref
 %\usepackage{newtxmath} 
 %\usepackage{ccfonts}
-\usepackage{times}%,mathptmx}
+%\usepackage{times}%,mathptmx}
 
 %\usepackage[T1]{fontenc}
 %\usepackage[sfdefault]{biolinum}   %% Option 'sfdefault' only if
@@ -98,8 +98,21 @@ floatfix,
 \renewcommand{\thesubsection}{\arabic{section}.\arabic{subsection}}
 \renewcommand{\thesubsubsection}{\arabic{section}.\arabic{subsection}.\arabic{subsubsection}}
 
+\usepackage{chngcntr}
+\counterwithin*{equation}{section}
 \renewcommand{\theequation}{\arabic{section}.\arabic{equation}}
 
+
+\usepackage[most]{tcolorbox}
+\newtcolorbox{myquote}[1][]{%
+    colback=black!5,
+    colframe=black!5,
+    notitle,
+    sharp corners,
+    borderline west={2pt}{0pt}{red!80!black},
+    enhanced,
+    breakable,
+    }
 
 \newcommand{\x}{\bm{x}}
 \newcommand{\xt}{\bm{x}_{t}}
@@ -107,16 +120,23 @@ floatfix,
 \newcommand{\bmu}{\bm{\mu}}
 \newcommand{\alphat}{\alpha_t}
 \newcommand{\betat}{\beta_t}
+\newcommand{\sigmat}{\sigma_t}
 \newcommand{\alphatm}{\alpha_{t-1}}
 \newcommand{\betatm}{\beta_{t-1}}
 \newcommand{\alphatbar}{\bar{\alpha}_t}
 \newcommand{\betatbar}{\bar{\beta}_t}
 \newcommand{\alphatmbar}{\bar{\alpha}_{t-1}}
 \newcommand{\betatmbar}{\bar{\beta}_{t-1}}
+
 \newcommand{\et}{\bm{\varepsilon}_t}
+\newcommand{\etm}{\bm{\varepsilon}_{t-1}}
+
+\newcommand{\es}{\bm{\varepsilon}_\theta}
 \newcommand{\baralphat}{\bar{\alpha}_t}
 \newcommand{\barbetat}{\bar{\beta}_t}
 \newcommand{\muxt}{\bm{\mu}(\xt)}
+
+\newcommand{\normdist}{\mathcal{N}(0,\bm{I})}
 \begin{document}
 
 \singlespacing
@@ -140,8 +160,8 @@ Diffusion generative models, originally developed for high-quality image synthes
 \maketitle
 \tableofcontents
 
-\include{chapter_1}
-%\include{chapter_2}
+\input{chapter_1}
+\input{chapter_2}
 %\include{chapter_3}
 %\include{chapter_4}
 %\include{chapter_5}
@@ -152,6 +172,7 @@ Diffusion generative models, originally developed for high-quality image synthes
 %%\include{chapter_10}
 %\include{chapter_11}
 
+\newpage
 \scriptsize
 \bibliography{ref.bib}
 
