@@ -1,0 +1,159 @@
+\documentclass[%
+aip,
+jcp,
+10pt,
+amsmath,amssymb,
+%preprint,
+%reprint,
+floatfix,
+%author-year,
+%author-numerical,
+]{revtex4-2}
+
+\usepackage{titlesec}
+\titlespacing*{\section}
+{0pt}{1.5ex}{1.5ex}
+\titlespacing*{\subsection}
+{0pt}{1ex}{1ex}
+\titlespacing*{\subsubsection}
+{0pt}{1ex}{1ex}
+\usepackage{setspace}
+
+%\onehalfspacing
+
+%\usepackage{subcaption}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Place any additional packages needed here.  Only include packages
+%% which are essential, to avoid problems later. Do NOT use any
+%% packages which require e-TeX (for example etoolbox): the e-TeX
+%% extensions are not currently available on the ACS conversion
+%% servers.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage[version=3]{mhchem} 
+\usepackage[dvipsnames]{xcolor}
+%\usepackage{subcaption}
+\usepackage{amsfonts}
+\usepackage{graphicx}% Include figure files
+\usepackage[colorlinks=true,citecolor=red]{hyperref}
+
+\usepackage[dvipsnames]{xcolor}
+\usepackage{url}
+\usepackage{color}
+\usepackage{dcolumn}% Align table columns on decimal point
+\usepackage{bm}% bold math
+\usepackage[mathlines]{lineno}% Enable numbering of text and display math
+%\linenumbers\relax % Commence numbering lines
+\usepackage{comment}
+\usepackage[version=3]{mhchem}
+\usepackage[top=1cm, bottom=1.8cm, left=1.8cm, right=5.5cm, heightrounded,marginparwidth=4.6cm, marginparsep=3mm]{geometry}
+%\usepackage{balance}
+\usepackage[capitalise]{cleveref} % Nice reference scheme. use: \cref
+%\usepackage{newtxmath} 
+%\usepackage{ccfonts}
+\usepackage{times}%,mathptmx}
+
+%\usepackage[T1]{fontenc}
+%\usepackage[sfdefault]{biolinum}   %% Option 'sfdefault' only if
+%% the base font of the document is to be sans serif
+\usepackage{graphicx} 
+%\usepackage{epstopdf}
+%\usepackage{booktabs}
+%\usepackage[upright]{fourier} % not slanted greek letters
+%\usepackage[euler]{textgreek}
+\usepackage{amsmath}
+%\usepackage{lastpage}
+
+
+\DeclareMathOperator*{\argmin}{argmin}
+
+\newcommand{\myfontsp}[2]{\ensuremath{\textmyfont{#1}_{\textmyfont{#2}}}}
+\newcommand*\jy[1]{\textcolor{blue}{#1}} 
+\newcommand*\pol[1]{\textcolor{black}{#1}} 
+
+\newcommand{\myatm}[2]{\ensuremath{\ce{#1}_{#2}}}
+\newcommand{\angstrom}{\textup{\AA}}
+% for derivatives, abs, norm... symbol. see http://mirrors.ctan.org/macros/latex/contrib/commath/commath.pdf
+%\usepackage{ccfonts}
+
+
+%\setlength{\oddsidemargin}{-0.25in}  
+%\setlength{\leftmargin}{-0.25in}%
+%\setlength{\rightmargin}{0.25in}%
+
+%\setlength{\textwidth}{6in}    
+%\setlength{\topmargin}{-0.8in}    
+%\setlength{\textheight}{9in}   
+
+\let\oldbibliography\thebibliography
+\renewcommand{\thebibliography}[1]{\oldbibliography{#1}
+\setlength{\itemsep}{0pt}} 
+\allowdisplaybreaks
+
+%\renewcommand{\familydefault}{\sfdefault}
+%\usepackage{CrimsonPro}
+\usepackage{marginnote}
+
+\renewcommand{\thesection}{\arabic{section}}
+\renewcommand{\thesubsection}{\arabic{section}.\arabic{subsection}}
+\renewcommand{\thesubsubsection}{\arabic{section}.\arabic{subsection}.\arabic{subsubsection}}
+
+\renewcommand{\theequation}{\arabic{section}.\arabic{equation}}
+
+
+\newcommand{\x}{\bm{x}}
+\newcommand{\xt}{\bm{x}_{t}}
+\newcommand{\xtm}{\bm{x}_{t-1}}
+\newcommand{\bmu}{\bm{\mu}}
+\newcommand{\alphat}{\alpha_t}
+\newcommand{\betat}{\beta_t}
+\newcommand{\alphatm}{\alpha_{t-1}}
+\newcommand{\betatm}{\beta_{t-1}}
+\newcommand{\alphatbar}{\bar{\alpha}_t}
+\newcommand{\betatbar}{\bar{\beta}_t}
+\newcommand{\alphatmbar}{\bar{\alpha}_{t-1}}
+\newcommand{\betatmbar}{\bar{\beta}_{t-1}}
+\newcommand{\et}{\bm{\varepsilon}_t}
+\newcommand{\baralphat}{\bar{\alpha}_t}
+\newcommand{\barbetat}{\bar{\beta}_t}
+\newcommand{\muxt}{\bm{\mu}(\xt)}
+\begin{document}
+
+\singlespacing
+
+\title{Topics on Diffusion Generative Models}
+
+\author{Original Text in Chinese by Jianlin Su}
+\affiliation{\url{https://kexue.fm}}
+
+\author{Translated and Annotated by Jack Yang}
+%\email{J.Yang@soton.ac.uk}
+\affiliation{School of Materials Science and Engineering, University of New South Wales, Sydney, New South Wales 2052, Australia}
+\email{jianliang.yang1@unsw.edu.au}
+
+
+\date{\today}
+
+\begin{abstract}
+Diffusion generative models, originally developed for high-quality image synthesis, have gradually gained popularity in other scientific research domains, including materials science for innovative materials discoveries. Compared with other deep learning models, however, diffusion models are much more mathematically involved, thus more challenging to be understood by novelists. Nevertheless, the ideal of diffusion generative models have strong link with the diffusion processes, which can be described by stochastic diffusion equations and are very known across many fields of fundamental science. In light of these, the translator (JY) sees huge potential in the applications of both the theoretical frameworks and the numerical implementations of the diffusion generative models in the future. Throughout the past few years, the original author (JS) has written a series of blog articles  on diffusion generative models in Chinese, providing a more approachable understanding on the mathematical motivations and derivations behind this family of generative models, of which JY believes an English translated version will bring greater benefit to the large community who are interested in utilising these models in their research and development. This document is, therefore, prepared for this purpose while JY was studying JS's blog articles. Some further annotations and notes are added by JY to facilitate the understanding of the original materials.
+\end{abstract}	
+\maketitle
+\tableofcontents
+
+\include{chapter_1}
+%\include{chapter_2}
+%\include{chapter_3}
+%\include{chapter_4}
+%\include{chapter_5}
+%\include{chapter_6}
+%\include{chapter_7}
+%\include{chapter_8}
+%\include{chapter_9}
+%%\include{chapter_10}
+%\include{chapter_11}
+
+\scriptsize
+\bibliography{ref.bib}
+
+
+\end{document}
