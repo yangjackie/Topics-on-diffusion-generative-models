@@ -1,1 +1,136 @@
 \section{DDPM=Bayes Plus Denoising}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9164}}}
+
+In the previous two sections, we have provided two different mathematical derivations for DDPM. The first one is based on an analogous comparison to the building of a house, which is easy to understand, but difficult to be extended theoretically. In the second approach, we draw our conclusions from  the framework of autoregressive variational autoencoder. Although theoretically more robust,. it is rather formal and lack of inspiration for  further improvements. In this section, we will give another derivation of the DDPM, which applies the Bayes' rule to simplify the computations. The derivation contains more reasoning,  which makes it more inspirational. Such derivation also has a deeper relationship with the DDIM,\marginnote{\footnotesize{\textcolor{red}{Diffusion Denoising Implicit Model}}} which is to be discussed in the next section.
+
+\subsection{Recap on the model setup}
+Recall that in the DDPM models, the forward process is modelled as a process of progressive transformation:
+\begin{equation}
+    \label{eq:3.1}
+    \bm{x}=\bm{x}_0\to\bm{x}_1\to\bm{x}_2\to\cdots\to\bm{x}_{T-1}\to\bm{x}_{T}=\bm{z}
+\end{equation}
+in which the process gradually adds noise to the sample $\x$ and transform it into a pure noise $\bm{z}$, whereas the reverse process gradually denoises $\bm{z}$ to recover the sample data $\x$. This reverse process is the generative model that we aim to build.
+
+The forward process is simple to achieve, in which every step is given by
+\begin{equation}
+    \label{eq:3.2}
+    \xt=\alphat\xtm+\betat\et\qquad \et\sim\normdist,
+\end{equation}
+which can be equivalently written as $p(\xt|\xtm)=\mathcal{N}(\xt;\alphat\xtm,\betat^2\bm{I})$. Under the constraint of $\alphat^2+\betat^2=1$, we have the following:
+\begin{align}
+    \xt&=\alphat\xtm+\betat\et \nonumber\\
+    &=\alphat(\alphatm\x_{t-2}+\betatm \etm)    +\betat\et \nonumber\\
+    &=\cdots\nonumber\\
+    &= (\alphat\cdots\alpha_1)\x_0+\underbrace{(\alphat\cdots\alpha_2)\beta_1\bm{\varepsilon}_1+(\alphat\cdots\alpha_3)\beta_2\bm{\varepsilon}_2+\cdots+\alphat\betatm\etm+\betat\et}_{\sim\mathcal{N}(0,(1-\alphat^2\cdots\alpha_1^2)\bm{I})}
+    \label{eq:3.3}
+\end{align}
+From which we have $p(\xt|\x_0)=\mathcal{N}(\xt;\alphatbar\x_0,\betatbar^2\bm{I})$ with $\alphatbar=\alpha_1\cdots\alphat$ and $\betatbar=\sqrt{1-\alphatbar^2}$. What DDPM is trying to achieve, is to figure out how to obtain \textcolor{red}{$p(\xtm|\xt)$} for the reverse generation process using the information above. With this, we could start from any arbitrary $\bm{z}=\x_T$, and through sampling $\x_{T-1}$, $\x_{T-2}$, $\ldots$, $\x_1$ stepwise, we could eventually generate a new sample $\x=\x_0$.
+
+\subsection{Using the Bayes' theorem} \marginnote{\footnotesize{\textcolor{red}{As such, in what follows, we will focus on deriving expressions for $p(\xtm|\xt)$}}}
+
+According to the Bayes' theorem, we have, in this case
+\begin{equation}
+    \label{eq:3.4}
+    p(\xtm|\xt)=\frac{p(\xt|\xtm)p(\xtm)}{p(\xt)}.
+\end{equation}
+However, we do not know what $p(\xtm)$ and $p(\x)$ look like, so we cannot move further from this expression. However, we know that these distributions are tractable once they are conditioned on the input $\x_0$. In this case, we have
+\begin{equation}
+    \label{eq:3.5}
+    p(\xtm|\xt,\textcolor{red}{\x_0})=\frac{p(\xt|\xtm)p(\xtm|\textcolor{red}{\x_0})}{p(\xt|\textcolor{red}{\x_0})}.
+\end{equation}
+Since we know the expressions for $p(\xt|\xtm)$, $p(\xtm|\x_0)$ and $p(\xt|\x_0)$ (the latter two from one-shot sampling), \cref{eq:3.5} can be simplified into:
+\textcolor{red}{
+\begin{equation}
+    \label{eq:3.6}
+    p(\xtm|\xt,\x_0)=\mathcal{N}\left(\xtm; \frac{\alphat\betatmbar^2}{\betatbar^2}\xt+\frac{\alphatmbar\betat^2}{\betatbar^2}\x_0,\frac{\betatmbar^2\betat^2}{\betatbar^2}\bm{I}  \right).
+\end{equation}
+}
+\begin{myquote}
+\footnotesize{
+To prove \cref{eq:3.6}, note that the exponent in \cref{eq:3.5}, ignoring the factor $\frac{1}{2}$, is
+\begin{equation}\label{eq:3.7}
+    \frac{\|\xt-\alphat\xtm\|_2^2}{\betat^2}+ \frac{\|\xtm-\alphatmbar\x_0\|_2^2}{\betatmbar^2} -  \frac{\|\xt-\alphatbar\x_0\|_2^2}{\betatbar^2}.
+\end{equation}
+This expression is quadratic in $\xtm$, so the finally distribution must also be a normal distribution. This means that we only need to determine the corresponding mean and variance. It can be shown that the coefficient for the $\|\xtm\|_2^2$ term is
+\begin{equation}
+    \label{eq:3.8}
+    \frac{\alphat^2}{\betat^2}+\frac{1}{\betatmbar^2}=\frac{\alphat^2\betatmbar^2+\betat^2}{\betat^2\betatmbar^2}=\frac{\alphat^2(1-\alphatmbar^2)+(1-\alphat^2)}{\betat^2\betatmbar^2}=\frac{1-\alphatbar^2}{\betat^2\betatmbar^2}=\frac{\betatbar^2}{\betat^2\betatmbar^2}
+\end{equation}
+This means that the final exponent must be of the form $\frac{\betatbar^2}{\betat^2\betatmbar^2}\|\xtm-\tilde{\bm{\mu}}(\xt,\x_0)\|_2^2$, such that the covariance matrix is $\frac{\betat^2\betatmbar^2}{\betatbar^2}\bm{I}$. On the other hand, taking out the linear term in $\xtm$, the coefficient is $-2\left(\frac{\alphat}{\betat}\xt+\frac{\alphatmbar}{\betatmbar^2}\x_0\right)$, which, upon dividing by $-\frac{2\betat^2}{\betatmbar^2\betat^2}$, we get the following:
+\begin{equation}
+    \label{eq:3.9}
+    \tilde{\bm{\mu}}(\xt,\x_0)= \frac{\alphat\betatmbar^2}{\betatbar}\xt+\frac{\alphatmbar\betat^2}{\betatbar^2}\x_0.
+\end{equation}
+By now, we have acquired all the information we need for the transition probability $p(\xtm|\xt,\x_0)$.
+}
+\end{myquote}
+
+\subsection{The denoising process}
+Although we now have an expression for  $p(\xtm|\xt,\x_0)$, this is not the final answer that we want. This is because ultimately we would like to predict $\xtm$ from $\xt$ that is independent from $\x_0$. If, on the other hand, we can predict $\x_0$ from $\xt$, then we would be able to estimate $\x_0$ in $p(\xtm|\xt,\x_0)$ and make it only dependent upon $\xt$. This can be achieved by letting $\x_0=\mubarxt$ as a learnable, with a loss function of $\|\x_0-\mubarxt\|_2^2$. After the model has been trained, we can write
+\begin{equation}
+    \label{eq:3.10}
+    p(\xtm|\xt,\x_0)\approx p(\xtm|\xt,\x_0=\mubarxt)=\mathcal{N}\left(\xtm; \frac{\alphat\betatmbar^2}{\betatbar^2}\xt+\frac{\alphatmbar\betat^2}{\betatbar^2}\mubarxt,\frac{\betatmbar^2\betat^2}{\betatbar^2}\bm{I}  \right).
+\end{equation}
+In the expression $\|\x_0-\mubarxt\|_2^2$, $\x_0$ represents the original data, $\xt$ is the noised data. Hence, we are training a denoising model! This is the meaning of the first D in DDPM.
+
+More specifically, $p(\xt|\x_0)=\mathcal{N}(\xt;\alphatbar\x_0,\betatbar^2\bm{I})$, which means $\xt=\alphatbar\x_0+\betatbar\bm{\varepsilon}$ with $\bm{\varepsilon}\sim\mathcal{N}(0,\bm{I})$, or equivalently, $\x_0=\frac{1}{\alphatbar}(\xt-\betatbar\bm{\varepsilon})$. This inspires us to parameterise $\mubarxt$ in the form of 
+\begin{equation}
+    \label{eq:3.11}
+    \mubarxt=\frac{1}{\alphatbar}(\xt-\betatbar\es(\xt,t)).
+\end{equation}
+In this case, the loss function for training $\mubarxt$ becomes
+\begin{equation}
+    \label{eq:3.12}
+    \|\x_0-\mubarxt\|_2^2=\frac{\betatbar^2}{\alphatbar^2}\|\bm{\varepsilon}- \betatbar\es( \alphatbar \x_0+\betatbar\bm{\varepsilon}  ,t) \|_2^2.
+\end{equation}
+Upon ignoring the coefficient $\betatbar^2/\alphatbar^2$, we thus recovered the loss function in the original DDPM paper. It can be seen that the derivation here from $\xt$ to $\xtm$ is more straight forward, which avoids the manipulations of integrals as done in the previous section. Now we can substitute \cref{eq:3.11} back into  \cref{eq:3.10} and simplify, which lead to
+\textcolor{red}{
+\begin{equation}
+    \label{eq:3.13}
+    p(\xtm|\xt,\x_0)\approx p(\xtm|\xt,\x_0=\mubarxt)=\mathcal{N}\left(\xtm; \frac{1}{\alphat}\left(\xt-\frac{\betat^2}{\betatbar} \es(\xt,t)\right),\frac{\betatmbar^2\betat^2}{\betatbar^2}\bm{I}  \right).
+\end{equation}}
+Once trained, this will be the probability distribution that will be used for the reverse sampling process. 
+\begin{myquote}
+    \footnotesize{
+    To derive this result, note the following:
+\begin{equation*}
+    \frac{\alphatmbar\betat^2}{\betatbar^2}\frac{1}{\alphatbar}(\xt-\betatbar\es(\xt,t)) = \frac{\betat^2}{\betatbar^2\alphat}\xt- \frac{\betat^2}{\betatbar\alphat}\betatbar\es(\xt,t).
+\end{equation*}
+Using the fact that $\alphatbar=\alphatmbar\alphat$. Then for the coefficient of $\xt$, we have
+\begin{equation*}
+    \frac{\alphat\betatmbar^2}{\betatbar^2}+\frac{\betat^2}{\betatbar^2\alphat}=\frac{\alphat^2\betatmbar^2+\betat^2}{\betat^2\alphat}=\frac{\alphat^2(1-\alphatmbar^2)+\betat^2}{\betat^2\alphat}=\frac{(\alphat^2+\betat^2)-\alphat\alphatmbar^2}{\betat^2\alphat}=\frac{1-\alphatbar^2}{\alphat\betatbar^2}=\frac{\betatbar^2}{\alphat\betatbar^2}=\frac{1}{\alphat}.
+\end{equation*}
+    }
+\end{myquote}
+\subsection{Correcting the estimates}
+An interesting question arises here, which is related to the introduction of $\mubarxt$ that is used for estimating $\x_0$ when approximating $p(\xtm|\xt,\x_0)$ with $p(\xtm|\xt)$. If such a model can be used for estimating $\x_0$ in on-shot, then why would we still need to transform $\xt$ to $\x_0$ slowly in a stepwise manner?
+
+The problem is that, in reality, estimating $\x_0$ from $\mubarxt$ will not give very accurate result, at least in the first two steps of the reverse process. It only plays a forecasting roles to enable us taking a small step $p(\xtm|\xt)$ backward. This is similar to the idea of `estimate-and-correct' in numerical calculations, in which we start from a rough estimate and iterate forward until an accurate answer is reached. Similar idea can be found in Hinton's paper `\textit{Lookahead optimiser: $k$ steps forward, 1 step back}'.\cite{zhang2019lookahead}
+
+
+\subsection{Remaining questions}
+In the previous section, we pointed out that the challenge behind the direct application of \cref{eq:3.4} is the existence of the terms $p(\xtm)$ and $p(\xt)$ that are numerically intractable. This is because, according to the following definition using the marginalisation:
+\begin{equation}
+    \label{eq:3.15}
+    p(\xt)=\int p(\xt|\x_0)\tilde{p}(\x_0)d\x_0,
+\end{equation}
+in which we know the distribution $p(\xt|\x_0)$ but $\tilde{p}(\x_0)$ is not known a priori, so we cannot compute $p(\xt)$ directly, except in two special cases, which will be discussed here. It also provides the proofs for the choices of the standard deviation $\sigmat$ that was introduced in the previous section. 
+
+In the first case, we have only one sample in the entire dataset. Without lost of generality, we assume this sample is $\bm{0}$, then $\tilde{p}(\x_0)=\delta(\x_0)$. In this case, we have $p(\xt|\bm{0})=p(\xt)$. Substitute this into \cref{eq:3.4} shows that this corresponds to the conditional distributions $p(\xtm|\xt,\x_0)$ under the special condition of $\x_0=0$. As such, we now have \marginnote{\footnotesize{\textcolor{red}{This can be obtained by setting $\muxt\equiv 0$ in \cref{eq:3.10}.}}}
+\begin{equation}
+    \label{eq:3.16}
+    p(\xtm|\xt)=p(\xtm|\xt,\x_0=0)=\mathcal{N}\left(\xtm; \frac{\alphat\betatmbar^2}{\betatbar^2}\xt, \frac{\betatmbar^2\betat^2}{\betatbar^2}\bm{I} \right).
+\end{equation}
+This shows that, in this case, we have \textcolor{red}{$\sigmat=\frac{\betatmbar^2\betat^2}{\betatbar^2}$}, which is one particular choice of the standard deviation for the reverse sampling process.
+
+In the second case, the sample follows a normal distribution $\tilde{p}(\x_0)=\mathcal{N}(\x_0;0,\bm{I})$. From the one-shot sampling in the forward diffusion $p(\xt|\x_0)=\mathcal{N}(\xt;\alphatbar\x_0,\betatbar\bm{I})$, we have $\xt=\alphatbar \x_0+\betatbar\bm{\varepsilon}$, with $\bm{\varepsilon}\sim\normdist$. Since $\tilde{p}(\x_0)\sim\normdist$, $p(\xt)$ should also follow a normal distribution. Substituting the expression of a normal distribution into \cref{eq:3.4} and removing the factor of $-\frac{1}{2}$, the result is
+\begin{equation}
+    \label{eq:1.17}
+    \frac{\|\xt-\alphatm\xtm\|^2}{\betat^2}+\|\xtm\|^2-\|\xt\|^2.
+\end{equation}
+Similar to how we derived the expression for $p(\xtm|\xt,\x_0)$, the corresponding distribution can be written as 
+\begin{equation}
+    \label{eq:1.18}
+    p(\xtm|\xt)=\mathcal{N}\left( \xtm;\alphat\xt,\betat^2\bm{I} \right),
+\end{equation}
+which shows the variant $\sigmat=\betat^2$, giving another choice if $\sigma_t$ for the sampling process.

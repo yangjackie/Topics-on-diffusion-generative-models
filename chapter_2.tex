@@ -19,7 +19,7 @@ To overcome this limitation, DDPM breaks these processes into multiple steps:
 \end{align}
 In this way, every transition probability $p(\xt|\xtm)$ or $q(\xtm|\xt)$  is only responsible for making a small change to the sample by the model. One may ask, if both $p$ and $q$ are normal distributions, why this alternative model will work better than the single-stepped one [\cref{eq:2.1}]? This is because, \emph{Gaussian distributions work better in approximating small incremental changes}, which is similar to approximating a curve with linear relationship that will only work within a small region of $\Delta\bm{x}$. As such, theoretically, the formulation proposed in \cref{eq:2.2} is able to improve the performance of a single-shot VAE.
 
-\subsection{The joint KL Divergence}
+\subsection{The joint KL divergence}
 To arrive at a step-wise formulation for VAE, we have \textcolor{red}{$p(\xt|\xtm)$} for every encoding step and \textcolor{red}{$q(\xtm|\xt)$} for every generation step.
 \marginnote{\footnotesize{\textcolor{red}{In the following derivations, the convention behind VAE will be adopted, in which we will use $p$ for the transition probability of the forward (encoding) process and $q$ for the backward (decoding) process, which is \textbf{opposite} to the notations used in the DDPM literatures!}}} This allows us to write down the \textbf{joint probability distributions}:
 \begin{align}
