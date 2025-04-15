@@ -1,1 +1,207 @@
 \section{The General Framework Based on Stochastic Differential Equation}
+\label{sect_5:SDE}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9209}}}
+
+When writing \cref{section:DDPM_1} for this series of blog post on diffusion model, some readers had already recommended the paper entitled ``\emph{Score-Based Generative Modelling through Stochastic Differential Equation}''\cite{song2020score} published by Dr Yang Song. This paper has established a rather general theoretical framework for the diffusion model, which has linked up many results derived from DDPM, Stochastic Differential Equations (SDE) and Ordinary Differential Equation (ODE). Although this is a very good paper, it is not well suited for new comers in this field. This is because this paper has applied directly, and extensively, results from SDE, Fokker-Planck equations and score matching, which are rather challenging to be understood. However, with the foundations built from the previous few sections, we can now try to understand this particular paper. In the following chapters, we will try to recover the results derived in this paper, with minimum prerequisite knowledge.
+
+\subsection{Stochastic differentiations}\marginnote{\footnotesize{
+\textcolor{red}{This subsection discuss how the diffusion model, that was established in the discrete time domain, can be generalised into the continuous time domain.}
+}}
+
+In the DDPM formalism, the diffusion process has been divided into a fixed number of $T$ steps. Using the analogy of house demolition and rebuilding that was established in \cref{section:DDPM_1}, it means that both the demolition and rebuilding processes have been divided into $T$ steps beforehand with $T$ being a model hyperparameter. Such a choice is rather artificial. In reality, the entire process should be a transformative one that is continuous in time, which can be described by an SDE.
+
+With this understanding, the forward process can be described by the following SDE:
+\begin{equation}
+    \label{eq:5.1}
+    d\x=f_t(\x)dt+g_t d\bm{w}.
+\end{equation}
+Some readers may be rather not familiar with this equation, this is of no problem. The equation can be regarded as the limiting case at $\Delta t\to 0$ for the following equation of finite differences:
+\begin{equation}
+    \label{eq:5.2}
+    \x_{t+\Delta t}-\x_t=f_t(\x)\Delta t+g_t\sqrt{\Delta t }\bm{\varepsilon},\qquad \bm{\varepsilon}\sim\normdist.
+\end{equation}
+In a more straightfoward language, if the entire demolition process takes one day, then it is a transformative process from $t=0$ to $t=1$, in which every single step can be described by the above equation of finite differences. There is no specific restriction on $\Delta t$, except that the smaller $\Delta t$ is , the better will \cref{eq:5.2} approximate the original SDE [\cref{eq:5.1}]. If we choose $\Delta t=0.001$, then it corresponds to $T=1000$ in the original DDPM formulation, and similarly $\Delta t=0.01$ translates to $T=100$. Therefore, under the viewpoint of a SDE in the continuous time domain, \emph{different choices of $T$ represent different levels of discretising the SDE}, but should all automatically lead to identical results. As such, \textit{it is not  necessary to pre-fix the $T$ values, but changing it based on the requirement of the accuracy levels for different problems.} Therefore, the fundamental advantage of the SDE formalism of the diffusion model is \emph{to separate theoretical analysis from numerical implementations}. We can conduct theoretical analysis based on the mathematical tools of SDE in the continuous time domain, while implementing it with a suitable discretisation strategy for numerical calculations.
+
+Examining \cref{eq:5.2} in details, some readers may wonder why the first term in the RHS is $\mathcal{O}(\Delta t)$, whereas the second term is $\mathcal{O}(\sqrt{\Delta t})$. In another word, why the deterministic term is of a higher order than the random term? This is indeed a puzzling point in SDE. Simply speaking, $\bm{\varepsilon}$ always follows a normal distribution if this random term also follows $\mathcal{O}(\sqrt{\Delta t})$. Since the normal distribution has a mean of 0 and a standard deviation of $\bm{I}$, the neighbouring random effect could cancel out each other, and the long-term effect of the random process will only show up if we magnify it to $\mathcal{O}(\sqrt{\Delta t})$.
+
+\subsection{The reverse process}
+In the language of the probability theory, \cref{eq:5.2} is equivalent to the conditional probability
+\begin{align}
+    p(\x_{t+\Delta t}|\x_t)&=\mathcal{N}\left( \x_{t+\Delta t}; \x_t+f_t(\x_t)\Delta t,g_t^2\Delta t\bm{I}\right)\nonumber\\
+    &\propto \exp\left(-\frac{\| \x_{t+\Delta t}-\xt-f_t(\xt)dt\|_2^2}{2g_t^2\Delta t}\right),\label{eq:5.3}
+\end{align}
+which, for simplicity, we have ignored the normalisation constant. Following DDPM, we want to know how to rebuild from the demolition process, i.e., we want to determine $p(\xt|\x_{t+\Delta t})$. Again, from the Baye's rule,\marginnote{\footnotesize{\textcolor{red}{In this case, we can ignore $\log p(\xt) - \log p(\x_{t+\Delta t})\to 0$, then the first term in \cref{eq:5.4} dominates. When $\Delta t\to 0$, the fraction can diverge to $\infty$, making $p(\xt|\x_{t+\Delta t})$ vanishes. This can be avoided if $\x_t$ is sufficiently close to $\x_{t+\Delta t}$, such that 
+$\|\x_{t+\Delta t}-\x_t \|_2^2\sim \Delta t$ (i.e. they are of similar magnitude, so that $\|\x_{t+\Delta t}-\x_t \|_2^2/2g_t^2\Delta t\sim 1$, to avoid vanishing transition probability. }}}
+\begin{align}
+  p(\xt|\x_{t+\Delta t})&=\frac{p(\x_{t+\Delta t}|\x_t) \textcolor{red}{p(\xt)} }{\textcolor{red}{p(\x_{t+\Delta t})}} = p(\x_{t+\Delta t}|\x_t)\textcolor{red}{\exp\left[ \log p(\xt) - \log p(\x_{t+\Delta t}) \right]} \nonumber\\
+  &\propto \exp \left( -\frac{\| \x_{t+\Delta t}-\xt-f_t(\xt)dt\|_2^2}{2g_t^2\Delta t} \textcolor{red}{  + \log p(\xt) - \log p(\x_{t+\Delta t})}  \right).\label{eq:5.4}
+\end{align}
+It can be seen that, when $\Delta t$ is sufficiently small, $p(\xt|\x_{t+\Delta t})$ will  be non-zero only when $\x_{t+\Delta t}$ is very close to $\x_t$. Similar argument applies to $p(\x_{t+\Delta t}|\x_t)$. 
+
+In this case, we can make a Taylor expansion for $\log p(\x_{t+\Delta t})$ as an approximation when $\x_{t+\Delta t}$ is sufficiently close to $\x_t$:
+\begin{equation}
+    \label{eq:5.5}
+    \log p(\x_{t+\Delta t})\approx \log p(\x_t)+ (\x_{t+\Delta t}-\x_t)\nabla _{\x_t}\log p(\x_t)+ \Delta t\frac{\partial}{\partial t}\log p(\x_t).
+\end{equation}
+Note that the last $\frac{\partial}{\partial t}$-term cannot be ignored, this is because $p(\x_t)$ is the probability of the random variable being equal to $\x_t$ at time $t$, and $p(\x_{t+\Delta t})$ is the probability of the random variable being equal to $\x_{t+\Delta t}$ at time $t+\Delta t$. In this case, we must include the partial derivative with respect to the time variable. With this, we can now substitute the expression of $\log p(\x_{t+\Delta t})$ from \cref{eq:5.5} into \cref{eq:5.4} and complete the square, we then have,
+\begin{align}
+    p(\xt|\x_{t+\Delta t}) &\propto \exp \left(  -\frac{\| \x_{t+\Delta t}-\xt-f_t(\xt)dt\|_2^2}{2g_t^2\Delta t} -  (\x_{t+\Delta t}-\x_t)\nabla _{\x_t}\log p(\x_t)-\Delta t\frac{\partial}{\partial t}\log p(\x_t) \right)  \nonumber\\
+    &\propto \exp\left(-\frac{\| \x_{t+\Delta t}-\xt-f_t(\xt)dt\|_2^2-2g_t^2(\x_{t+\Delta t}-\x_t)\nabla _{\x_t}\log p(\x_t)\Delta t-2g_t^2\Delta t^2 \frac{\partial}{\partial t}\log p(\xt)  }{2g_t^2\Delta t}\right)  \nonumber \\
+    &\propto\exp\left(-\frac{\| \x_{t+\Delta t}-\xt-[f_t(\xt)-g_t^2 \nabla_{\xt} \log p(\xt)]\Delta t\|_2^2}{2g_t^2\Delta t} -\frac{1}{2}\nabla_{\xt}\log p(\xt)\Delta t+\frac{\partial}{\partial t}\log p(\xt)\Delta t  \right)\nonumber\\
+    &\propto \exp\left(-\frac{\| \x_{t+\Delta t}-\xt-[f_t(\xt)-g_t^2 \nabla_{\xt} \log p(\xt)]\Delta t\|_2^2}{2g_t^2\Delta t}+\mathcal{O}(\Delta t)\right). \label{eq:5.6}
+\end{align}
+When $\Delta t\to 0$, $mathcal{O}(\Delta t)$ plays a negligible role, in this case,
+\begin{align}
+    p(\xt|\x_{t+\Delta t}) &\approx  \exp\left(-\frac{\| \x_{t+\Delta t}-\xt-[f_t(\xt)-g_t^2 \nabla_{\xt} \log p(\xt)]\Delta t\|_2^2}{2g_t^2\Delta t}\right) \nonumber\\
+    &\approx \exp\left(-\frac{\|\xt- \x_{t+\Delta t}-[f_{t+\Delta t}(\x_{t+\Delta t})-g_{t+\Delta t}^2 \nabla_{\x_{t+\Delta t}} \log p(\x_{t+\Delta t})]\Delta t\|_2^2}{2g_{t+\Delta t}^2\Delta t}\right).\label{eq:5.7}
+\end{align}
+This shows that $p(\xt|\x_{t+\Delta t})$ is approximately a normal distribution with the following mean:
+\begin{equation*}
+    \bm{\mu}=\x_{t+\Delta t}-[f_{t+\Delta t}(\x_{t+\Delta t})-g_{t+\Delta t}^2 \nabla_{\x_{t+\Delta t}} \log p(\x_{t+\Delta t})]\Delta t,
+\end{equation*}
+and standard deviation of $\bm{\sigma}=g_{t+\Delta t}^2\Delta t\bm{I}$. Taking the limit of $\Delta t\to 0$, then the corresponding SDE for the reverse process is
+\begin{equation}
+    \label{eq:5.8}
+    d\x=[f_t(\xt)-g_t^2\nabla_{\x}\log p_t(\x)]dt +g_t d\bm{w}. 
+\end{equation}
+This first occurred in the paper entitled ``Reverse-Time Diffusion Equation Model''\cite{anderson1982reverse}. Here, the subscript $t$ has been included in $p$ to signify that this is the distribution at time $t$.
+
+\subsection{Score matching}
+
+Now we have obtained the SDE for the reverse diffusion process [\cref{eq:5.8}], if we further knows the quantity $\nabla_{\x}\log p_t(\x)$, then we can rebuild the sample from the following discretised version of the SDE:
+\begin{equation}
+    \label{eq:5.9}
+    \xt-\x_{t+\Delta t}=[f_{t+\Delta t}(\x_{t+\Delta t})-g_{t+\Delta t}^2 \nabla_{\x_{t+\Delta t}} \log p(\x_{t+\Delta t})]\Delta t - g_{t+\Delta t}\sqrt{\Delta t}\bm{\varepsilon},
+\end{equation}
+in which $\bm{\varepsilon}\sim\normdist$. This then completes the derivation of the diffusion generative model. In this case, how would we compute $\nabla_{\x}\log p_t(\x)$? Note that the probability distribution $p_t(\x)$ at $t$ is identical to $p(\xt)$ in the previous sections, it represents the marginal distribution at  time $t$. This means that we can write the following:
+\begin{equation}
+    \label{eq:5.10}
+    p(\xt|\x_0)=\lim_{\Delta t \to 0}\int\cdots\iint p(\xt|\x_{t-\Delta t})p(\x_{t-\Delta t}|\x_{t-2\Delta t})\cdots p(\x_{\Delta t}|\x_0)d\x_{t-\Delta t}d\x_{t-2\Delta t}d\x_{\Delta t},
+\end{equation}
+which may be computed directly. This is because in real applications, we will design a model in which $p(\xt|\x_0)$ has an analytical solution. This is possible when $f_t(\x)$ is a linear function in $\x$. With this, we have
+\begin{equation}
+    \label{eq:5.11}
+    p(\xt)=\int p(\xt|\x_0)\tilde{p}(\x_0)d\x_0=\mathbb{E}_{\x_0}[p(\xt|\x_0)], 
+\end{equation}
+and
+\begin{equation}
+    \label{eq:5.12}
+    \nabla_{\x_t}\log p(\x_t)=\frac{\mathbb{E}_{\x_0}[\nabla_{\x_t}p(\xt|\x_0)]}{\mathbb{E}_{\x_0}[p(\xt|\x_0)]}=\frac{\mathbb{E}_{\x_0}[p(\xt|\x_0)\nabla_{\x_t}\log p(\xt|\x_0)]}{\mathbb{E}_{\x_0}[p(\xt|\x_0)]}.
+\end{equation}
+In can be seen that  the last expression in \cref{eq:5.12} contains a weighted average of $\nabla_{\x_t}\log p(\xt|\x_0)$. As we assume $p(\xt|\x_0)$ has an analytical solution, in principle,  \cref{eq:5.12} will also become computable. However, practically, it involves an average across all the training data $\x_0$, which is both heavy in computational costs and lack of good generalisability. Hence we would like to train a neural network $s_{\bm{\theta}}(\xt,t)$, which can be used for computing $\nabla_{\x_t}\log p(\xt|\x_0)$.
+
+Some readers may be familiar with the following expression:
+\begin{equation}
+    \label{eq:5.13}
+    \mathbb{E}[\x]=\argmin_{\bm{\mu}}\mathbb{E}_{\x}\left[\|\bm{\mu}-\x\|_2^2\right],
+\end{equation}
+meaning that, in order to make $\bm{\mu}$ to equal to be the mean of $\x$, we only need to minimise the mean of $\|\bm{\mu}-\x\|_2^2$. Similarly, in order to equate $s_{\bm{\theta}}(\xt,t)$ to the weighted average of $\nabla_{\x_t}\log p(\xt|\x_0)$ (\emph{i.e.} $\nabla_{\x_t}\log p(\x_t)$), we only need to minimise the weighted average of $\| s_{\bm{\theta}}(\xt,t) - \nabla_{\x_t}\log p(\xt|\x_0)\|_2^2 $, \emph{i.e.}
+\marginnote{\footnotesize{\textcolor{red}{Again, the purpose here is to seek a way to drop $\x_0$ in $\nabla_{\x_t}\log p(\xt|\x_0)$ for the sampling process such that it is not conditioned on $\x_0$.}}}
+\begin{equation}
+    \label{eq:1.14}
+    \frac{\mathbb{E}_{\x_0}\left[p(\xt|\x_0) \| s_{\bm{\theta}}(\xt,t) - \nabla_{\x_t}\log p(\xt|\x_0)\|_2^2 \right]}{\mathbb{E}_{\x_0}[p(\xt|\x_0)]}.
+\end{equation}
+The denominator $\mathbb{E}_{\x_0}[p(\xt|\x_0)]$ will only contribute to a weight to the loss function, which can be dropped in the following discussions without affecting the final solution. Finally, we integrate the loss function over $\xt$, meaning we must minimise the loss function over every $\xt$, from which we reached the final form of the loss function:\marginnote{\footnotesize{\textcolor{red}{This expression provides a physically meaningful explanation to the loss function, which is not necessarily the form that is numerically implemented in most cases.}}}
+\begin{align}
+    &\quad\int\mathbb{E}_{\x_0}\left[p(\xt|\x_0) \| s_{\bm{\theta}}(\xt,t) - \nabla_{\x_t}\log p(\xt|\x_0)\|_2^2 \right]d\xt \nonumber\\
+    &=\textcolor{red}{\mathbb{E}_{\x_0,\xt\sim p(\xt|\x_0)\tilde{p}(\x_0)}\left[\| s_{\bm{\theta}}(\xt,t) - \nabla_{\x_t}\log p(\xt|\x_0)\|_2^2 \right]}.\label{eq:5.15}
+\end{align}
+
+\cref{eq:5.15} represents the loss function for the \textbf{``(conditional) score-matching'' generative model}. The analytical solutions to the denoising loss function that was derived in \cref{sect:2_VAE} can be regarded as a special case for this result. The concept of score matching could be first traced back to the 2005 paper entitled ``\emph{Estimation of Non-Normalised Statistical Models by Score Matching}''\cite{hyvarinen2005estimation}. As for the conditional score matching, the author believes that the earliest paper is ``\emph{A Connection between Score Matching and Denoising Autoencoder}''\cite{vincent2011connection} that was published in 2011.
+
+Although the results presented in this section is the same as the score matching, in our derivation, we did not use the concept of scores. Instead, the results come naturally from manipulating the loss function. The author thinks such an approach is more inspirational to the readers to establish its connection to the generative models. Hopefully, such an approach can also reduce the difficulities for understanding the score matching model.
+
+\subsection{The final results}
+Hence, we have now established the general procedure of a diffusion generative model:
+\begin{myquote}
+\begin{enumerate}
+    \item Define the forward (demolision) process based on the SDE [\cref{eq:5.1}].
+    \item Find the expression for $p(\xt|\x_0)$.
+    \item Train the score function $s_{\bm{\theta}}(\xt,t)$ using the loss function \cref{eq:5.15} (score-matching).
+    \item Substitute $s_{\bm{\theta}}(\xt,t)$ into \cref{eq:5.8}, replacing the term $\nabla_{\x_t}\log p(\x_t)$ to complete the reverse process of re-building.
+\end{enumerate}
+\end{myquote}
+
+Most readers may be frightened by the term such as the stochastic differential equations. However, fundamentally, SDE was only used as a bridge for out subsequent discussions. Once the SDE has been discretised into \cref{eq:5.2} and \cref{eq:5.3}, we can basically forget about SDE, making it much easier to be understood conceptually.
+
+It is also not difficult to see that, it is  easy to define an SDE [\cref{eq:5.1}], but it is rather challenging to solve for $p(\xt|\x_0)$ from it. In the remaining part of the original paper\cite{song2020score}, it focused on deriving the results for two practical examples. However, if solving for $p(\xt|\x_0)$ from a pre-defined SDE is too difficult, it will be more trivial to first define $p(\xt|\x_0)$, just like the case of DDIM, and then deduce the corresponding SDE.
+
+For example, let us first define
+\begin{equation}
+    \label{eq:5.16}
+    p(\xt|\x_0)=\mathcal{N}(\xt;\alphatbar\x_0,\betatbar^2\bm{I}).
+\end{equation}
+Without lost of generality, let us also assume the starting point is $t=0$ and the end point being $t=1$, then the corresponding boundary conditions for $\alphatbar$ and $\betatbar$ are:
+\begin{equation}
+    \label{eq:5.17}
+    \bar{\alpha}_0=1,\quad \alphatbar=0,\quad \bar{\beta}_0=0,\quad\betatbar=1.
+\end{equation}
+In reality, we only need to supply these boundary conditions approximately. For instance, in the previous section, DDPM is equivalent to the choice of $\alphatbar=e^{-5t^2}$, such that when $t=1$, $e^{-5}\approx0$.
+
+Once we have $p(\xt|\x_0)$, we can deduce \cref{eq:5.1} in the reverse order, which, in principle, is to seek a solution for $p(\x_{t+\Delta t}|\xt)$, which satisfy the condition of 
+\begin{equation}
+    \label{eq:5.18}
+    p(\x_{t+\Delta t}|\x_0) = \int p(\x_{t+\Delta t}|\xt)p(\xt|\x_0)d\xt.
+\end{equation}
+Considering only the linear solution, then we have
+\begin{equation}
+    \label{eq:5.19}
+    d\x=f_t \x dt+g_t d\bm{w}.
+\end{equation}
+Similar to \cref{sect_4:DDIM}, we have the following:
+\begin{table*}[h]
+    \centering
+    \begin{tabular}{c|c|c}
+    \hline
+      Notation    & Representative Distribution &  Sampling\\
+    \hline
+$p(\x_{t+\Delta t}|\x_0)$ & $\mathcal{N}\left(\xt; \bar{\alpha}_{t+\Delta t}\x_0,\bar{\beta}^2_{t+\Delta t}\bm{I} \right)$  & $\x_{t+\Delta t}=\bar{\alpha}_{t+\Delta t}\x_0 +\bar{\beta}_{t+\Delta t}\bm{\varepsilon}$ \\ \hline
+$p(\x_{t}|\x_0)$ & $\mathcal{N}\left(\xt; \bar{\alpha}_{t}\x_0,\bar{\beta}^2_{t}\bm{I} \right)$  & $\x_{t}=\bar{\alpha}_{t}\x_0 +\bar{\beta}_{t}\bm{\varepsilon}_1$ \\ \hline
+$p(\x_{t+\Delta t}|\x_0)$ &  $\mathcal{N}\left( \x_{t+\Delta t}; \x_t+f_t(\x_t)\Delta t,g_t^2\Delta t\bm{I}\right)$ & $\x_{t+\Delta t}=(1+f_t \Delta t)\xt+g_t\sqrt{\Delta t}\bm{\varepsilon}_2$\\\hline
+\parbox{3cm}{\begin{align*}
+\int &p(\x_{t+\Delta t}|\xt)\cdot\\
+&p(\xt|\x_0)d\xt
+\end{align*}} &  &  \parbox{7cm}{\begin{align*}
+&\quad \x_{t+\Delta t}\\
+&=(1+f_t \Delta t)\xt+g_t \sqrt{\Delta t}\bm{\varepsilon}_2\\
+&=(1+f_t \Delta t)(\bar{\alpha}_{t}\x_0 +\bar{\beta}_{t}\bm{\varepsilon}_1) + g_t \sqrt{\Delta t}\bm{\varepsilon}_2\\
+&=(1+f_t \Delta t)\bar{\alpha}_{t}\x_0 + ((1+f_t \Delta t)\bar{\beta}_{t}\bm{\varepsilon}_1+g_t \sqrt{\Delta t}\bm{\varepsilon}_2)
+\end{align*}}\\
+\hline
+    \end{tabular}
+\end{table*}
+
+From here, we get the  
+\begin{align}
+    \bar{\alpha}_{t+\Delta t} &= (1+f_t \Delta t)\bar{\alpha}_{t} \nonumber \\
+    \bar{\beta}^{2}_{t+\Delta t} &=(1+f_t \Delta t)^2\bar{\beta}_{t}^2+g_t^2 \Delta t.\label{eq:5.20}
+\end{align}
+By letting $\Delta t\to 0$, then we can solve for $f_t$ and $g_t$ as 
+\marginnote{\footnotesize{\textcolor{red}{The first equation may be derived as following. From \cref{eq:5.20} we have 
+\begin{equation*}
+    \alphatbar +d\alphatbar = (1+f_t dt)\alphatbar
+\end{equation*}
+\begin{equation*}
+   d\alphatbar = f_t dt \alphatbar
+\end{equation*}
+\begin{equation*}
+    \frac{d\alphatbar}{\alphatbar}=f_t dt
+\end{equation*}
+}}}
+\begin{align}
+    f_t &= \frac{d}{dt}(\ln \alphatbar)=\frac{1}{\alphatbar}\frac{d\alphatbar}{dt}\nonumber\\
+    g_t &= \alphatbar^2\frac{d}{dt}\left(\frac{\betatbar^2}{\alphatbar^2}\right)=2\alphatbar\betatbar\frac{d}{dt}\left(\frac{\betatbar}{\alphatbar} \right). \label{eq:5.21}
+\end{align}
+If we take $\alphatbar\equiv 1$, then the results corresponds to the variance-exploding SDE (VE-SDE). On the other hand, if $\alphatbar^2+\betatbar^2=1$, this corresponds to the variance-preserving SDE (VP-SDE).
+
+As for the loss function, now we have 
+\begin{equation}
+    \label{eq:5.22}
+    \nabla_{\x_t}\log p(\xt|\x_0) =-\frac{\xt-\alphatbar\x_0}{\betatbar^2}=-\frac{\bm{\varepsilon}}{\betatbar},
+\end{equation}
+in which the second equal sign comes from the fact that $\xt=\alphatbar\x_0+\betatbar\bm{\varepsilon}$. To align with the previous results, let $s_{\bm{\theta}}=-\frac{1}{\betatbar}\bm{\varepsilon}_{\bm{\theta}}(\xt,t)$, then \cref{eq:5.15} becomes
+\begin{equation}
+    \label{eq:5.23}
+\frac{1}{\betatbar^2}\mathbb{E}_{\x_0\sim\tilde{p}(\x_0),\bm{\varepsilon}\sim\mathcal{N}(0,\bm{I})}\left[ \| \bm{\varepsilon}_{\bm{\theta}}(\alphatbar\x_0+\betatbar\bm{\varepsilon},t)-\bm{\varepsilon} \|_2^2 \right].
+\end{equation}
+This is the same loss function as the DDPM after ignoring the coefficients. By replacing $\nabla_{\x_{t+\Delta t}} \log p(\x_{t+\Delta t})$ with $-\frac{1}{\bar{\beta}_{t+\Delta t}}\bm{\varepsilon}_{\bm{\theta}}(\x_{t+\Delta t},t+\Delta t)$, the result has the same form (to the first-order approximation) as for the reverse sampling process in DDPM. 

@@ -1,1 +1,180 @@
-\section{DDIM=High Level View of DDPM}
+\section{DDIM=High Level View of DDPM}\label{sect_4:DDIM}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9181}}}
+
+
+Till now, we have shown three different interpretations of DDPM, each from a different perspective. So, is there a higher-level view of DDPM, from which we could acquire some new understanding on the diffusion model? The answer is yes. This leads to the DDIM that was introduced in the paper entitled ``Denoising Diffusion Implicit Models''\cite{song2020denoising}, which will be discussed in this section.
+
+\subsection{The thought process}
+In the previous sections, we have mentioned that the derivation of DDPM is closely related to DDIM. More specifically, the derivations presented in the previous sections can be briefly summarised as following:
+\begin{equation}
+    \label{eq:4.1}
+    p(\xt|\xtm)\xrightarrow{\text{derive}} p(\xt|\x_0) \xrightarrow{\text{derive}} p(\xtm|\xt,\x_0)\xrightarrow{\text{approximate}}p(\xtm|\xt).
+\end{equation}
+The whole process is progressed in a stepwise manner. However, it is not difficult to find specific characteristics in the above formulation:
+\begin{myquote}
+\begin{enumerate}
+    \item The loss function for model training is only dependent on $p(\xt|\x_0)$;
+    \item The sampling process only relies on $p(\xtm|\xt)$.
+\end{enumerate}
+\end{myquote}
+It means that, although the entire derivation for the DDPM results is started from $p(\xt|\xtm)$ and progress forwards in a stepwise manner, the final results have actually nothing to do with $p(\xt|\xtm)$. This makes us to ask the following question:
+\begin{myquote}
+    \textbf{High-Level Viewpoint 1}
+
+    Since the final results for the diffusion generative model is independent from $p(\xt|\xtm)$, can this term be completely removed from the entire derivation?
+\end{myquote}
+This is the key idea that led to the birth of DDIM.
+
+\subsection{Method of undetermined coefficients}
+Some readers may find such an idea contradicts the Baye's rule that was applied in the derivation presented in the previous chapter:
+\begin{equation}
+    \label{eq:4.2}
+    p(\xtm|\xt,\x_0)=\frac{p(\xt|\xtm)p(\xtm|\x_0)}{p(\xt|\x_0)}.
+\end{equation}
+In this case, if we do not have an ansatz for $p(\xt|\xtm)$, then how will we be able to obtain  $p(\xtm|\xt,\x_0)$? This question is actually raised from a very narrow mindset. In fact, without specifying $p(\xt|\xtm)$, the solution space for $p(\xtm|\xt,\x_0)$ is even larger. In certain aspects, it even provides a much simpler derivation, because now $p(\xtm|\xt,\x_0)$ will only need to satisfy the following condition for the marginal distribution:
+\begin{equation}
+\label{eq:4.3}
+    \int p(\xtm|\textcolor{red}{\xt},\x_0)p(\textcolor{red}{\xt}|\x_0)d\textcolor{red}{\xt}=p(\xtm|\x_0).
+\end{equation}
+We can solve this equation using the method of undetermined coefficients. In the previous section, we have shown that the solution for $p(\xtm|xt,\x_0)$ is a normal distribution, so here, we can generalise this even further and let
+\begin{equation}
+    \label{eq:4.4}
+    p(\xtm|\xt,\x_0) = \mathcal{N}(\xtm;\kappa_t\xt+\lambda_t \x_0,\sigmat^2\bm{I}),
+\end{equation}
+in which $\kappa_t$, $\lambda_t$ and $\sigmat$ are all coefficients to be determined. In order not to retrain the model, we keep $p(\xtm|x_0)$ and $p(\xt|\x_0)$ as before. As such, we have
+\begin{table*}[h]
+    \centering
+    \begin{tabular}{c|c|c}
+    \hline
+      Notation    & Representative Distribution &  Sampling\\
+    \hline
+     $p(\xtm|\x_0)$  &  $\mathcal{N}(\xtm;\alphatmbar\x_0,\betatmbar^2\bm{I})$ & $\xtm=\alphatmbar \x_0+\betatmbar \bm{\varepsilon}$ \\
+     \hline
+     $p(\xt|\x_0)$  & $\mathcal{N}(\xt;\alphatbar\x_0,\betatbar^2\bm{I})$  & $\xt=\alphatbar\x_0+\betatbar\bm{\varepsilon}_1$\\
+     \hline
+     $p(\xtm|\xt,\x_0)$ &  $\mathcal{N}(\xtm;\kappa_t\xt+\lambda_t \x_0,\sigmat^2\bm{I})$ & $\xtm=\kappa_t\xt+\lambda_t\x_0+\sigmat\bm{\varepsilon}_2$ \\
+     \hline
+     $\displaystyle{\int p(\xtm|\xt,\x_0)}\cdot p(\xt|\x_0)d\xt $ &   &   \parbox{6cm}{\begin{align*}
+    \xtm &= \kappa_t\xt +\lambda_t\x_0+\sigmat\bm{\varepsilon}_2\\
+     &= \kappa_t (\alphatbar\x_0 +\betatbar\bm{\varepsilon}_1) + \lambda_t\x_0+\sigmat\bm{\varepsilon}_2\\
+     &= (\kappa_t\alphatbar+\lambda_t)\x_0+(\kappa_t\betatbar\bm{\varepsilon}_1+\sigmat\bm{\varepsilon}_2)
+  \end{align*}} \\
+    \hline
+    \end{tabular}
+\end{table*}
+in which $\bm{\varepsilon}$, $\bm{\varepsilon}_1$, $\bm{\varepsilon}_2\sim\mathcal{N}(0,\bm{I})$, and based on the superposition of normal distributions, we have $\kappa_t\betatbar\bm{\varepsilon}_1+\sigmat\bm{\varepsilon}_2\sim \sqrt{\kappa_t^2\betatbar^2+\sigmat^2}\bm{\varepsilon}$. By comparing the two different sampling approaches for computing $\xtm$, we found that, in order for \cref{eq:4.3} to hold, we must equate
+\begin{equation}
+\label{eq:4.5}
+    \alphatmbar=\kappa_t\alphatbar+\lambda_t, \qquad \betatmbar=\sqrt{\kappa_t^2\betatbar^2+\sigmat^2}.
+\end{equation}
+In which we have three unknowns but only two equations. This is why the solution space for $p(\xtm|\xt,\x_0)$ is even larger if we do not specify $p(\xt|\xtm)$. By making $\sigma_t$ as an independent variable, we have the following solutions:
+\begin{equation}
+    \label{eq:4.6}
+    \kappa_t=\frac{\sqrt{\betatmbar^2-\sigmat^2}}{\betatmbar^2},\qquad \lambda_t=\alphatmbar-\frac{\alphatbar\sqrt{\betatmbar^2-\sigmat^2}}{\betatbar^2}
+\end{equation}
+or equivalently,
+\begin{equation}
+    \label{eq:4.7}
+    p(\xtm|\xt,\x_0)=\mathcal{N}\left(\xtm;\frac{\sqrt{\betatmbar^2-\sigmat^2}}{\betatmbar^2}\xt+\left(\alphatmbar-\frac{\alphatbar\sqrt{\betatmbar^2-\sigmat^2}}{\betatbar^2} \right) \x_0, \sigmat^2\bm{I} \right).
+\end{equation}
+For convenience, we choose $\bar{\alpha}_0=1$ and $\beta_0=0$. More specifically, we don't necessarily need to constrain $\alphat^2+\betat^2=1$ here. But in order to align with the previous results, we still set $\alphat^2+\betat^2=1$.
+
+\subsection{Same procedure as before}
+The above derivation shows that, without specifying $p(\xt|\xtm)$, but given $p(\xt|\x_0)$ and $p(\xtm|\x_0)$, we arrive at a set of solutions for $p(\xtm|\xt,\x_0)$ that are dependent on the free parameter $\sigmat$. Using the analogy of demolishing and rebuiding from \cref{section:DDPM_1}, it means now we know how the building will finally be demolished into $[p(\xt|\x_0),p(\xtm|\x_0)]$, but we do not know how each demolition step $[p(\xt|\xtm)]$ is achieved. From here, we want to learn how to rebuild the building through $p(\xtm|\xt)$. Of course, if we  want to know how the demolition process works, we could use the Baye's theorem in the opposite way,
+\begin{equation}
+    \label{eq:4.8}
+    p(\xt|\xtm,\x_0)=\frac{p(\xtm|\xt,\x_0)p(\xt|\x_0)}{p(\xtm|\x_0)}.
+\end{equation}
+
+What follows is the same as shown in the previous chapter. Since we would like to use $p(\xtm|\xt)$ for the generation process, not $p(\xtm|\xt,\x_0)$ which is conditioned on $\x_0$, we want to parameterise $\x_0$ with 
+\begin{equation}
+    \label{eq:4.9}
+    \mubarxt=\frac{1}{\alphatbar}\left(\xt-\betatbar\es(\xt,t)  \right).
+\end{equation}
+Because we did not change $p(\xt|\x_0)$,  the target function for the training the model is still $\|\bm{\varepsilon}-\es(\alphatbar\x_0+\betatbar\bm{\varepsilon},t) \|_2^2$. This means that the training process has not changed. We can use the model trained from DDPM and replace $\x_0$ in \cref{eq:4.7} with $\mubarxt$, from which we get:
+\begin{align}
+    p(\xtm|\xt,\x_0)&=(\xtm|\xt,\x_0=\mubarxt)\nonumber\\
+   &=\mathcal{N}\left(\xtm; \frac{1}{\alphat}\left(\xt-\left( \betatbar-\alphat\sqrt{\betatmbar^2-\sigmat^2}
+\right)\es(\xt,t)\right) ,\sigmat^2\bm{I}\right). \label{eq:4.10}
+\end{align}
+This gives $p(\xtm|\xt)$ that is needed for the sampling procedure, where $\alphat=\alphatbar/\alphatmbar$. Here, we did not modify the training procedure, as such, the model also did not change. However, the sampling process now has a new parameter $\sigmat$, which brings some fresh results to DDPM.
+
+\subsection{A few examples}
+\marginnote{\footnotesize{Refer back to the discussions on the choices of standard deviations $\sigmat$ in the previous two sections.}}
+In principle, there is no restriction on the choice of the parameter $\sigmat$. However, different choices of $\sigmat$ will lead to completely different sampling process. Here we will give a few examples.
+
+
+First, let $\sigmat=\betatmbar\betat/\betatbar$, where $\betat=\sqrt{1-\alphat^2}$. Substituting this back into \cref{eq:4.10} and we have
+\begin{align}
+    p(\xtm|\xt)&\approx p(\xtm|\xt,\x_0=\muxt)\nonumber\\
+    &=\mathcal{N}\left( \xtm;\frac{1}{\alphat}\left(\xt-\frac{\betat^2}{\betatbar}\es(\xt,t)\right), \frac{\betatmbar^2\betat^2}{\betatbar^2}\bm{I} \right),
+    \label{eq:4.11}
+\end{align}
+which is identical to the result presented in \cref{eq:3.13}.\marginnote{\footnotesize{\textcolor{red}{Recall that in the previous section, the result shown in \cref{eq:4.11} was obtained by assuming \(p(\xt|\xtm)\sim\mathcal{N}\left(\xtm; \frac{\alphat\betatmbar^2}{\betatbar^2}\xt, \frac{\betatmbar^2\betat^2}{\betatbar^2}\bm{I} \right)\) and then apply the Bayes' rule with the known distributions of $p(\xt|\x_0)$ and $p(\xtm|\x_0)$. \\ The $\sigma_t$ parameter can be traced back to the VAE formalism, in which we used the probability $q(\xtm|\xt)$ for the decoder to calculate the KL-divergence. By taking the logarithm of this parameterised normal distribution, we get $-\log[q(\xtm|\xt)]\sim\frac{1}{\sigmat^2}\|\xtm-\mubarxt \|_2^2.$}}} In particular, in the DDIM paper, the results from setting different $\sigmat=\eta\betatmbar\betat/\betatbar$ with $\eta\in[0,1]$ had been compared.
+
+In the second example, we have $\sigmat=\betat$, which is the other choice of $\sigmat$ that has been discussed previously. However, this does not lead to a more simplified version of \cref{eq:4.10}. Nevertheless, the DDIM shows good performances in the numerical experiments using this standard choice of $\sigmat$ from DDPM. 
+
+In the most extreme case, we can let $\sigmat=0$. Then the transformation from $\xt$ to $\x_0$ becomes a well-defined one:
+\begin{equation}
+    \label{eq:4.12}
+\xtm=\frac{1}{\alphat}\left( \xt-(\betatbar-\alphat\betatmbar)\es(\xt,t)  \right).
+\end{equation}
+This is the case that was the focus of the original DDIM paper. Strictly speaking, DDIM is referred to this particular case of $\sigmat=0$, where by the I (implicit) in DDIM means this is an \textbf{implicit probabilistic model}. This is because, now the generated $\x_0$ from a given $\x_T=\bm{z}$ is no longer random, which we shall see, this has some advantages both theoretically and practically. 
+
+\subsection{Accelerated generations}
+It is worth reiterating that, in this section, we aim to eliminate $p(\xt|\xtm)$ in the derivation, as a result, all the expressions derived here become dependent on the hyperparameters $\alphatbar$ and $\betatbar$, whereas $\alphat$ and $\betat$ can be derived from $\alphat=\alphatbar/\alphatmbar$ and $\betat=\sqrt{1-\alphat^2}$. From the loss function $\|\bm{\varepsilon}-\es(\alphatbar\x_0+\betatbar\bm{\varepsilon},t) \|_2^2$, it can be seen that the training process is fixed once $\alphatbar$ is specified. 
+
+Based on this, it is noticed in DDIM that
+\begin{myquote}
+    \textbf{High-Level Viewpoint 2}
+
+    The training outcomes of DDPM in fact include the training outcomes of the parameters for any of its sub-sequences.
+\end{myquote}
+
+More specifically, let $\tau=[\tau_1,\tau_2,\ldots,\tau_{\dim(\tau)}]$ being an arbitrary sub-sequence of $[1,2,\ldots,\tau]$. If now we train a DDPM with parameters $\bar{\alpha}_{\tau_1},\bar{\alpha}_{\tau_2},\ldots,\bar{\alpha}_{\tau_{\dim(\tau)}}$ with $\dim(\tau)$ steps, then the target functions are a subset of the target functions for the original DDPM model with parameters $\bar{\alpha}_{1},\bar{\alpha}_{2},\ldots,\bar{\alpha}_\tau$ that is trained for $\tau$ steps. As such, when the model has been well trained, it actually includes all the parameters for models that consist of any of its arbitrary subsequences.
+
+This means that, we can extract a smaller model of $\dim(\tau)$ steps, and then sample according to \cref{eq:4.10} as 
+\begin{equation}
+p\left(\boldsymbol{x}_{\tau_{i-1}} \mid \boldsymbol{x}_{\tau_i}\right) \approx \mathcal{N}\left(\boldsymbol{x}_{\tau_{i-1}} ; \frac{\bar{\alpha}_{\tau_{i-1}}}{\bar{\alpha}_{\tau_i}}\left(\boldsymbol{x}_{\tau_i}-\left(\bar{\beta}_{\tau_i}-\frac{\bar{\alpha}_{\tau_i}}{\bar{\alpha}_{\tau_{i-1}}} \sqrt{\bar{\beta}_{\tau_{i-1}}^2-\tilde{\sigma}_{\tau_i}^2}\right) \boldsymbol{\epsilon}_{\boldsymbol{\theta}}\left(\boldsymbol{x}_{\tau_i}, \tau_i\right)\right), \tilde{\sigma}_{\tau_i}^2 \boldsymbol{I}\right)
+\end{equation}
+This is the process of accelerated sampling, which reduces the original $\tau$ diffusion steps to $\dim(\tau)$ steps. Notice that we cannot directly replace $\alpha_t$ in \cref{eq:4.10} by $\alpha_{\tau_i}$, as we mentioned, $\alpha_t$ is only a derived, auxiliary notation and equivalently, we should have $\alpha_{\tau_i}=\bar{\alpha}_{\tau_i}/\bar{\alpha}_{\tau_i-1}$. Similarly, $\bar{\sigma}_{\tau_i}$ is not $\sigma_{\tau_i}$, which must now be determined by changing its notations into $\alphatbar$ and $\betatbar$, followed by replacing $t$ and $t-1$ by $\tau_i$ and $\tau_{i-1}$, respectively. For instance,
+\begin{equation}
+    \sigmat=\frac{\betatmbar\betat}{\betatbar}=\frac{\betatmbar}{\betatbar}\sqrt{1-\frac{\alphatbar^2}{\alphatmbar^2}}\quad\to \quad \frac{\bar{\beta}_{\tau_{i-1}}}{\bar{\beta}_{\tau_i}} \sqrt{1-\frac{\bar{\alpha}_{\tau_i}^2}{\bar{\alpha}_{\tau_{i-1}}^2}}=\tilde{\sigma}_{\tau_i}. \label{eq:4.14}
+\end{equation}
+So why don't we just train a model of $\dim(\tau)$ steps, but must train a $\tau>\dim(\tau)$ model and then sample a sub-sequence? Possible explanation is that, on one hand, this enhances the model generalisability. On the other hand, it allows us to try other approaches of accelerated sampling without increasing the training costs.
+
+\subsection{Differential equation}
+
+We now go back to re-examine the case of $\sigmat=0$. In this case, \cref{eq:4.12} can be written equivalently as
+\begin{equation}
+    \label{eq:4.16}
+    \frac{\xt}{\alphatbar}-\frac{\xtm}{\alphatmbar}=\left(\frac{\betatbar}{\alphatbar}-\frac{\betatmbar}{\alphatmbar}\right)\es(\xt,t).
+\end{equation}
+When $T$ is sufficiently large, or when $\alphatbar$ and $\alphatmbar$ are sufficiently small, the above equation becomes the finite-difference form of an ordinary differential equation. More specifically, by introducing an imaginary time variable $s$, we have
+\begin{equation}
+    \label{eq:4.17}
+    \frac{d}{ds}\left( \frac{\bm{x}(s)}{\bar{\alpha}(s)}\right)=\es(\bm{x}(s),t(s))\frac{d}{ds}\left(\frac{\bar{\beta}(s)}{\bar{\alpha}(s)} \right).
+\end{equation}
+Without loss of generality, let $s\in[0,1]$, in which $s=0$ corresponds to $t=0$ and $s=1$ corresponds to $t=T$. Note that in the original DDPM paper, the imaginary time was set to $\frac{\bar{\beta}(s)}{\bar{\alpha}(s)}$. This is a rather unsuitable choice, as it lies within $[0,\infty)$. This unbounded limit is rather not well suitable for numerical solutions. 
+
+What we need to do now is to solve for $\x(0)$ given $\x(1)\sim\normdist$. The generation process of DDPM and DDIM corresponding to solving this ordinary differential equation (ODE, \cref{eq:4.16}) with Euler's method, which is known to be the slowest iterative method. Other approaches such as the Heun method and the R-K method may be the accelerated alternatives. This means that writing the generating process as ODE opens up new avenues to achieve accelerated samplings. 
+
+For example, using the default DDPM parameters with $T=1000$ and $\alphat=\sqrt{1-\frac{0.02t}{T}}$, repeating the process outlined in \cref{section:DDPM_1}, we have
+\begin{equation}
+    \label{eq:4.18}
+    \log\alphatbar=\sum_{i=k}^{t}\log\alpha_k=\frac{1}{2}\sum_{i=k}^{t}\log \left(1-\frac{0.02k}{T}\right)<\frac{1}{2}\sum_{i=k}^{t}\log \left(-\frac{0.02k}{T}\right)=-\frac{0.005t(t+1)}{T}.
+\end{equation}
+The above estimation is rather good given that every $\alpha_k$ is very close to 1. On the other hand, since the starting point for this chapter is $p(\xt|\x_0)$, so we should start from $\alphatbar$. According to the approximation given above, let us now take
+\begin{equation}\label{eq:4.19}
+\alphatbar=\exp\left(-\frac{0.005t^2}{T}\right)=\exp\left(-\frac{5t^2}{T^2}\right).
+\end{equation}
+If we let $s=\frac{t}{T}$, then $s\in[0,1]$ (which is how we set it in the first place), and $\bar{\alpha}(s)=e^{-5s^2}$. Substituting this into \cref{eq:4.17} and simplify, we get:
+\begin{equation}
+    \label{eq:4.20}
+    \frac{d\x(s)}{ds}=10s\left(\frac{\es(\x(s),sT)}{\sqrt{1-e^{-10s^2}}}-\x(s)\right).
+\end{equation}
+We can also take $s=\frac{t^2}{T^2}$, now we still have $s\in[0,1]$ but with $\bar{\alpha}(s)=e^{-5s}$. Substituting this into \cref{eq:4.17} and simplify, we get:
+\begin{equation}
+    \label{eq:4.21}
+    \frac{d\x(s)}{ds}=5\left(\frac{\es(\x(s),\sqrt{s}T)}{\sqrt{1-e^{-10s}}}-\x(s)\right).
+\end{equation}

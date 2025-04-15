@@ -1,1 +1,130 @@
 \section{The General Framework Based on Ordinary Differential Equation}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9228}}}
+
+In the previous chapter, we have discussed the paper entitled ``\emph{Score-Based Generative Modelling through Stochastic Differential Equation} by Dr Yang Song\cite{song2020score}. However, as the title suggested, we had only discussed the part in the original paper that is related to the SDE, but have missed out the part that is related to the discussion around the probability flow ordinary differential equations (ODE), which will be discussed in details in this section.
+
+In fact, the ODE part only constitutes a small portion of the original paper, but we need to discuss it with a separate section. This is because, after thinking about the derivations for a long time, there is no way that it can bypass the Fokker-Planck equation in the whole process. In this case, we must spend some lengths in this section to discuss the Fokker-Planck equation first, before moving on to the main topic of ODE.
+
+\subsection{Think again}
+Let us first summarise the results from the previous section. First of all, we have defined a forward (demolition) process with an SDE:
+\begin{equation}
+    \label{eq:6.1}
+    d\x =f_t(\x)dt+g_t d\bm{w}.
+\end{equation}
+Then, we have derived the SDE for the corresponding reverse (building) process:
+\begin{equation}
+    \label{eq:6.2}
+    d\x=\left[ f_t(\x) -g_t^2\nabla_{\x}\log p_t(\x) \right]dt +g_t d\bm{w}.
+\end{equation}
+Finally, we use a neural network $s_{\bm{\theta}}(\x,t)$ to approximate $\nabla_{\x} \log p_{t}(\x)$ with the following loss function (score-matching):
+\begin{equation}
+    \label{eq:6.3}
+    \mathbb{E}_{\x_0,\xt\sim p(\xt|\x_0)\tilde{p}(\x_0)}\left[\| s_{\bm{\theta}}(\xt,t) - \nabla_{\x_t}\log p(\xt|\x_0)\|_2^2 \right].
+\end{equation}
+At this point, we have established the general framework for training and inferencing the diffusion model, which is the most generalised framework for DDPM. However, as introduced \cref{sect_4:DDIM}, is there a similar higher level view on SDE as the generalisation for DDPM? The answer is yes, which is the probability flow ODE to be discussed here.
+
+\subsection{The Dirac function}
+
+What have we achieved in DDIM? Simply speaking, it was found that the training of DDPM is targeted at $p(\xt|\x_0)$, that is independent from the transition probability $p(\xt|\xtm)$. Therefore, DDIM starts from $p(\xt|\x_0)$ to seek for more general solutions for $p(\xtm|\xt,\x_0)$ and $p(\xt|\xtm,\x_0)$. The idea of probability flow ODE is similar, which asks the following question:
+\begin{myquote}
+    In the SDE framework, for a fixed $p(\xt)$, how many different choices of $p(\x_{t+\Delta t}|\xt)$ are possible, or, can we find different SDEs for the forward process?
+\end{myquote}
+
+To answer this question, similar to the previous section, let us first rewrite the SDE [\cref{eq:6.1}] in its finite-difference form:
+\begin{equation}
+    \label{eq:6.4}
+    \x_{t+\Delta t} = \xt + f_t(\x)\Delta t + g_t\sqrt{\Delta t}\bm{\varepsilon},\qquad\bm{\varepsilon}\sim\normdist.
+\end{equation}
+\cref{eq:6.4} describes the relationship amongst the random variables $\x_{t+\Delta t}$, $\xt$ and $\bm{\varepsilon}$. Although we can easily find the expectation values for both sides, this is not what we want, as we are after the distribution $p(\bm{y}_t)$ and the relationship that it should satisfy.  To achieve this, we can use the Dirac function:
+\begin{equation}
+    \label{eq:6.5}
+    p(\x)=\int \delta(\x-\bm{y})p(\bm{y})d\bm{y} =\mathbb{E}_{\bm{y}}[\delta(\x-\bm{y})].
+\end{equation}
+To strictly define the Dirac function, we need to use the tools from functional analysis. But generally, we can obtain the correct result if we just treat it as a normal function. From \cref{eq:6.5}, we also know that the following holds for any $f(\x)$:
+\begin{equation}
+    \label{eq:6.6}
+    p(\x)f(\x)=\int\delta(\x-\bm{y})p(\bm{y}) f(\bm{y})d\bm{y} = \mathbb{E}_{\bm{y}}[f(\bm{y}) \delta(\x-\bm{y})].
+\end{equation}
+Taking the derivative of both sides, we have
+\begin{equation}
+    \label{eq:6.7}
+    \nabla_{\x} [p(\x)f(\x)] =  \mathbb{E}_{\bm{y}}[\nabla_{\x} (f(\bm{y}) \delta(\x-\bm{y}))] = \mathbb{E}_{\bm{y}}[f(\bm{y}) \cdot \nabla_{\x} \delta(\x-\bm{y})].
+\end{equation}
+This is an important relationship that will be used latter. It can be seen that, fundamentally, it should that the derivative of a Dirac function can be transferred to the function that it multiplies to via integration. 
+
+\subsection{The Fokker-Planck equation}
+With the preliminary knowledges discussed above, we can now write out the following based on \cref{eq:6.4}:
+\begin{align}
+    &\quad \delta (\x-\x_{t+\Delta t})\nonumber\\
+    &=\delta \left(\x-\xt - f_t(\x)\Delta t - g_t\sqrt{\Delta t}\bm{\varepsilon}\right)\nonumber\\
+    &=\delta(\x-\xt)-\left(f_t(\x)\Delta t + g_t\sqrt{\Delta t}\bm{\varepsilon}\right)\nabla_{\x}\delta(\x-\xt)+\frac{1}{2}\left(  g_t \sqrt{\Delta t}\bm{\varepsilon}\nabla_{\x}\right)^2\delta(\x-\xt),
+\end{align}
+in which we have Taylor expanded $\Delta(\x)$ as a normal function, and kept the terms that are not exceeding $\mathcal{O}(\Delta t)$. Now we take the expectation values of both sides:
+\begin{align}
+    &\quad p_{t+\Delta t}(\x)\nonumber\\
+    &=\mathbb{E}_{\x_{t+\Delta t}}\left[\delta (\x-\x_{t+\Delta t}) \right] \nonumber\\
+    &\approx \mathbb{E}_{\xt,\bm{\varepsilon}}\left[ \delta(\x-\xt)-\left(f_t(\x)\Delta t + g_t\sqrt{\Delta t}\bm{\varepsilon}\right)\nabla_{\x}\delta(\x-\xt)+\frac{1}{2}\left(  g_t \sqrt{\Delta t}\bm{\varepsilon}\nabla_{\x}\right)^2\delta(\x-\xt) \right] \marginnote{\footnotesize{Now use the fact that $\bm{\varepsilon}\sim \normdist$, such that $\mathbb{E}_{\bm{\varepsilon}}[\bm{\varepsilon}]=0$}} \nonumber\\
+    &=\mathbb{E}_{\xt}\left[ \delta(\x-\xt)- f_t(\xt)\Delta t\nabla_{\x} \delta(\x-\xt) + \textcolor{red}{\frac{1}{2}g_t^2\Delta t \nabla_{\x} \cdot \nabla_{\x} \delta(\x-\xt) } \right]\nonumber\\
+    &=p_t(\x)-\nabla_x [f_t(\x)\Delta t p_t(\x)]+\frac{1}{2}g_t^2\Delta t \nabla_{\x} \cdot \nabla_{\x} p_t (x).
+\end{align}
+Now if we divide both side by $\Delta t$ and take the limit of $\Delta t\to 0$, we then get the Fokker-Plank equation corresponding to \cref{eq:6.1}:
+\begin{equation}
+    \label{eq:6.10}
+    \frac{\partial}{\partial t}p_t(\x)=-\nabla_{\x} f_t(\x)p_t(\x)+\frac{1}{2}g_t^2\nabla_{\x}\cdot \nabla_{\x} p_t(\x),
+\end{equation}
+which is the partial differential equation that describes the time-dependent evolution of the marginal probability distribution.
+
+\subsection{Equivalent transformation}
+There is no need to worry about the appearance of another partial differential equation, as we are not going to seek for its solution but only borrow it to perform an equivalent transformation. In \cref{eq:6.10}, we can add in another function $\sigma_t^2$ to the second term and then subtract it out again. Providing that $\sigma_t^2\leq g_t^2$, \cref{eq:6.10} is fully equivalent to
+\begin{align}
+    \frac{\partial}{\partial t}p_t (\x)&=-\nabla_{\x}\left[f_t(\x)p_t(\x) -\frac{1}{2}(g_t^2\textcolor{red}{-\sigmat^2}) \nabla_{\x} p_t(\x)\right] \textcolor{red}{+\frac{1}{2}\sigmat^2\nabla_{\x}\cdot\nabla_{\x} p_t(\x)} \nonumber\\
+    &=-\nabla_x\left[\left(f_t(\x) -\frac{1}{2}(g_t^2-\sigmat^2)\nabla_{\x} \log p_t(\x) \right) p_t(\x) \right]+\frac{1}{2}\sigmat^2\nabla_{\x}\cdot\nabla_{\x} p_t(\x). \marginnote{\footnotesize{In the second line, we have used the fact that $\nabla_{\x}\log p(\x)\cdot p(\x)=\left[\frac{1}{p(\x)}\nabla_{\x}p(\x)\right]p(\x)=\nabla_{\x}p(\x)$.}} \label{eq:6.11}
+\end{align}
+In terms of the functional form, \cref{eq:6.11} is equivalent to changing the term of $f_t(\x)$ in \cref{eq:6.10} to $f_t(\x) -\frac{1}{2}(g_t^2-\sigmat^2)\nabla_{\x} \log p_t(\x)$, and $g_t^2$ into $\sigmat^2$. Since \cref{eq:6.10} is to be matched with \cref{eq:6.1}, this means that \cref{eq:6.11} is equivalent to:
+\begin{equation}
+    \label{eq:6.12}
+    d\x=\left(f_t(\x) -\frac{1}{2}(g_t^2-\sigmat^2)\nabla_{\x} \log p_t(\x)\right)dt+\sigmat d\bm{w}.
+\end{equation}
+However, do not forget that \cref{eq:6.10} is fully equivalent to \cref{eq:6.11}, this means that the corresponding marginal distributions $p_t(\x)$ that come from \cref{eq:6.1} and \cref{eq:6.12} are also fully equivalent to each other. \textbf{This means that we have two forward processes with different variances, which will produce identical marginal distributions!}
+
+This result is also equivalent to an updated version of DDIM, which we shall prove it later, that \cref{eq:6.12} is fully equivalent to DDIM when $f_t(\x)$ is a linear function. Furthermore, according to the SDE results derived in the previous section, the corresponding reverse SDE for \cref{eq:6.12} is
+\begin{equation}
+    \label{eq:6.13}
+    d\x=\left(f_t(\x) -\frac{1}{2}(g_t^2+\sigmat^2)\nabla_{\x} \log p_t(\x)\right)dt+\sigmat d\bm{w}.\marginnote{\footnotesize{Not quite sure how to derive this.}}
+\end{equation}
+
+\subsection{Neural ODE}
+\textbf{The main advantage of \cref{eq:6.12} is that it allows us to change the variance during the sampling process.} Here, we consider the extreme case of $\sigma_t\equiv0$, in which case the SDE falls back to an ODE:
+\begin{equation}
+    \label{eq:6.14}
+    d\x=\left(f_t(\x) -\frac{1}{2}g_t^2\nabla_{\x} \log p_t(\x)\right)dt.
+\end{equation}
+This is the so-called \textbf{Probability Flow ODE}. Practically, since $\nabla_{\x} \log p_t(\x)$ needs to be approximated by a neural network $s_{\bm{\theta}}(\x,t)$, so the above equation also corresponds to a neural ODE.
+
+Why do we need to investigate the special case when $\sigma_t\equiv0$? This is because now the propagation of our samples are noiseless, meaning we now have a well-defined transformation from $\x_0$ to $\x_T$. In this case, we can obtain the inverse transformation from $\x_T$ to $\x_0$ by directly solving the ODE in the reverse order, which is also a definitive process. This is consistent with the \textbf{flow models}, which transforms noises into samples through an invertible transformation. As such, by using probability flow ODE allows us to link the diffusion model with the flow model. For example, in the original paper\cite{song2020score}, it has mentioned that, by applying the probability flow ODE, we can accurately estimate the likelihood, as well as acquiring the latent variables. These are all the advantages of a flow model. By harnessing the invertibility of the flow model, we can also perform image editing in the latent space.
+
+On the other hand, when the transformation from $\x_T$ to $\x_0$ is governed by an ODE, we can apply different higher-order numerical methods for solving the ODE to accelerate the transformation from $\x_T$ to $\x_0$. Although there are some methods to accelerate the solving of SDE, they are far less well investigated compared to ODE. Overall, compared to SDE, ODE is more straightforward for both theoretical analysis and practical solutions.
+
+\subsection{Revisiting DDIM}
+In the last part of \cref{sect_4:DDIM}, we demonstrated that the continuous version of the DDIM corresponds to the ODE:
+\begin{equation}
+    \label{eq:6.15}
+    \frac{d}{ds}\left( \frac{\bm{x}(s)}{\bar{\alpha}(s)}\right)=\es(\bm{x}(s),t(s))\frac{d}{ds}\left(\frac{\bar{\beta}(s)}{\bar{\alpha}(s)} \right).
+\end{equation}
+We will show below, that this result is a special case when we take the function $f_t(\x)$ in \cref{eq:6.14} as a linear function in $\x$. As the end of \cref{sect_5:SDE}, we had the following relationships:
+\begin{equation}
+\label{eq:6.16}
+    \begin{cases}
+        f_{t}=\displaystyle{\frac{1}{\alphatbar}\frac{\partial\alphatbar}{\partial t}}\\
+        g^2(t)=\displaystyle{2\alphatbar\betatbar\frac{\partial}{\partial t}\left( \frac{\betatbar}{\alphatbar}\right)} \\
+        s_{\bm{\theta}}(\x,t)=\displaystyle{-\frac{\bm{\varepsilon}_{\bm{\theta}}(\x,t)}{\betatbar}}. 
+    \end{cases}
+\end{equation}
+Substituting these relationships into \cref{eq:6.14} and replacing $\nabla_{\x}\log p_{t}(\x)$ with $s_{\bm{\theta}}(\x,t)$. With further simplification, we obtain:
+\begin{equation}
+    \label{eq:6.17}
+    \frac{1}{\alphatbar}\frac{d\x}{dt}-\frac{\x}{\alphatbar^2}\frac{d\alphatbar}{dt}=\varepsilon_{\bm{\theta}}(\x,t)\frac{d}{dt}\left( \frac{\betatbar}{\alphatbar}\right),
+\end{equation}
+in which the L.H.S. can be further simplified into $\frac{d}{dt}\left( \frac{\x}{\alphatbar}\right)$, such that \cref{eq:6.17} becomes fully equivalent to \cref{eq:6.15}.
+
+As such, in this section, we have shown how to obtain a more general form of the differential equation for the forward process, from which we derived the probability flow ODE and demonstrated DDIM as one of its special case.
