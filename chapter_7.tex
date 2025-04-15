@@ -1,1 +1,151 @@
 \section{Optimum Estimation of the Variance (Part I)}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9245}}}
+
+For the diffusion models, how to choose the variance as one of its parameters is a critical issue, as the quality of the generated samples strongly depend on the different choices of the variances that are used for the model. 
+\begin{myquote}
+    \footnotesize{\textit{Recall in \cref{section:DDPM_1}, it was given that, with the trained network $\bm{\varepsilon}_{\bm{\theta}}(\x_t,t)$, the greedy search in the backward direction is $\xtm=\frac{1}{\alphat}(\xt-\betat \bm{\varepsilon}_{\bm{\theta}}(\x_t,t))$. This can be turned into a random search if we add a noise term with variance $\sigmat$, such that $\xtm=\frac{1}{\alphat}(\xt-\betat \bm{\varepsilon}_{\bm{\theta}}(\x_t,t))+\sigmat \bm{z}$ with $\bm{z}\sim\normdist$, and for practicality, we select $\sigmat=\betat$. }}
+\end{myquote}
+In \cref{sect:2_VAE}, we assumed two different sample distributions from which we deduced two different choices of $\sigmat$.
+\begin{myquote}
+    \footnotesize{\textit{Recall that when $\tilde{p}(\x)=\delta (\x_0)$, i.e. when there exists only a single sample, then the optimum choice of $\sigma_t=\betatmbar\betat^2/\betatbar^2$. These are determined from $p(\xtm|x_0)$ which can be computed from $p(\xtm|\xt,\x_0)$ when $\tilde{p}(\x_0)$ is known.
+    }}
+\end{myquote}
+In \cref{sect_4:DDIM}, when we discussed DDIM, we make the variance as a hyperparameter, and we even had allowed the variance to be zero, although such choice would deteriorate the quality of the generated samples.
+\begin{myquote}
+     \footnotesize{\textit{Recall that in DDIM, the variance was first introduced in the generalised transition probability for the reversed process (conditioned on $\x_0$):
+\begin{equation*}
+    p(\xtm|\xt,\x_0)=\mathcal{N}(\xtm;\kappa_t\xt+\lambda_t\x_0,\sigmat^2\bm{I}),
+\end{equation*}
+which we showed that both $\kappa_t$ and $\lambda_t$ can be written as a function of $\sigma_t$. This choice of the reverse transition probability has significantly expanded the solution space.
+     }}
+\end{myquote}
+In \cref{sect_5:SDE}, when we discussed the general framework of SDE, we showed that the variances for the forward and reverse SDE should be the same, but in principle, this only holds when $\Delta t\to 0$.
+\begin{myquote}
+\footnotesize{\textit{Recall that in \cref{sect_5:SDE}, we derived $p(\xt|\x_{t+\Delta t})$ for the reverse process using Baye's rule, Taylor expanded $\log p(\x_{t+\Delta t}$, and combined the Gaussian functions. When $\Delta t$ is non-zero, $\sigma_t=g_{t+\Delta t}^2\Delta t\bm{I}$, and when $\Delta t\to 0$, the stochastic term falls back to $g_t d\bm{w}$, which is the same as the forward process.
+}}
+
+\end{myquote}
+
+
+In the paper entitled ``\textit{Improved Denoising Diffusion Probabilitic Models}''\cite{nichol2021improved}, the variance was set to be a \textbf{learnable parameter}, but this increased the model training difficulties. Therefore, how should we choose the variance after all? The two papers entitled ``\textit{Analytic-DPM: An Analytic Estimate of the Optimal Reverse Variance in Diffusion Probabilistic Models}''\cite{bao2022analytic} and ``\textit{Estimating the Optimal Covariance with Imperfect Mean in Diffusion Probabilistic Models}''\cite{bao2022estimating} have provided a perfect solution to this problem, which will be discussed here.
+
+\subsection{Uncertainty in the reconstruction process}
+The two publications mentioned above came from the same team. The first article, which will be dubbed as \textbf{Analytic-DPM}, derived an analytical solution for the unconditioned variance based on DDIM. In the second paper, which will be dubbed as the \textbf{Extended-Analytic-DPM}, had weakened the hypothesis in the first paper, and proposed an optimisation procedure for the conditional variance. 
+
+In \cref{sect_4:DDIM}, when we presented the DDIM model, we showed that, for a given transition probability $p(\xt|\x_0)=\mathcal{N}(\xt;\alphatbar\x_0,\betatbar^2\bm{I})$, the general solution for the corresponding conditional transition probability for the reverse process $p(\xtm|\xt,\x_0)$ is 
+\begin{equation}
+    \label{eq:7.1}
+    p(\xtm|\xt,\x_0)=\mathcal{N}\left( \xtm;\frac{\sqrt{\betatmbar^2-\sigmat^2}}{\betatbar}\xt+\gamma_t\x_0,\sigmat^2\bm{I} \right),
+\end{equation}
+in which $\gamma_t=\alphatmbar-\alphatbar\sqrt{\betatmbar^2-\sigmat^2}/\betatbar$, and $\sigmat$ is an adjustable variance. In what follows, we applied $\mubarxt$ to estimate $\x_0$, and approximated
+\begin{equation}
+    \label{eq:7.2}
+    p(\xtm|\xt)\approx p(\xtm|\xt,\x_0=\mubarxt).
+\end{equation}
+However, from the viewpoint of Bayesian statistics, such a treatment is not very appropriate, as the prediction of $\x_0$ from $\xt$ cannot be very accurate but with some degrees of uncertainties. Strictly speaking, we should describe it with a probability distribution rather than a function. In fact, we have the following:\marginnote{\footnotesize{
+\textcolor{red}{Marginalisation over all possible transitions from $\xt$ to $\x_0$..}
+}}
+\begin{equation}
+    \label{eq:7.3}
+    p(\xtm|\xt)=\int p(\xtm|\xt,\x_0) p(\x_0|\xt)d\x_0.
+\end{equation}
+There is no way we can acquire an exact solution for $p(\x_0|\xt)$, but we only need a rough estimation. In this case, we can use a normal distribution $\mathcal{N}(\x_0;\mubarxt,\bar{\sigmat}^2\bm{I})$ to regress $p(\x_0|\xt)$ (details later). With this approximated distribution, we have,
+\begin{align}
+    \xtm&= \frac{\sqrt{\betatmbar^2-\sigmat^2}}{\betatbar}\xt+\gamma_t\x_0+\sigmat\bm{\varepsilon}_1 \marginnote{\footnotesize{\textcolor{red}{Directly drawing sample from \cref{eq:7.1}}}} \nonumber \\
+    &=\frac{\sqrt{\betatmbar^2-\sigmat^2}}{\betatbar}\xt+\gamma_t\left(\mubarxt+\bar{\sigmat}\bm{\varepsilon}_2\right) +  \sigmat\bm{\varepsilon}_1 \marginnote{\footnotesize{\textcolor{red}{Draw $\x_0$ from the approximated normal distribution}}}\nonumber\\
+    &= \left( \frac{\sqrt{\betatmbar^2-\sigmat^2}}{\betatbar}\xt+\gamma_t\mubarxt \right)+ \underbrace{\left(\sigmat\bm{\varepsilon}_1+\gamma_t\bar{\sigmat} \bm{\varepsilon}_2\right)}_{\textcolor{red}{\sim\sqrt{\sigmat^2+\gamma_t^2\bar{\sigmat}^2}\bm{\varepsilon}}},\label{eq:7.4}
+\end{align}
+in which $\bm{\varepsilon}_1$, $\bm{\varepsilon}_2$ and $\bm{\varepsilon}\sim\normdist$. By comparing \cref{eq:7.1}, \cref{eq:7.2} and \cref{eq:7.4}, it can be seen that $p(\xtm|\xt)$ is much closer to a normal distribution with the mean of $\frac{\sqrt{\betatmbar^2-\sigmat^2}}{\betatbar}\xt+\gamma_t\mubarxt$ and standard deviation of $(\sigmat^2+\gamma_t^2\bar{\sigmat}^2)\bm{I}$. In particular, the mean is identical to that in \cref{eq:7.1}, except now the standard deviation contains an extra term of $\gamma_t^2\bar{\sigmat}^2$, which will not be zero even if $\sigmat=0$. This extra term is the correction term to the optimum variance in the \textbf{Analytic-DPM}.
+
+\subsection{Optimisation for the mean}
+
+Now we move on to discuss why we can use a normal distribution $\mathcal{N}(\x_0;\mubarxt,\bar{\sigmat}^2\bm{I})$ to regress $p(\x_0|\xt)$.  This problem is equivalent of determining the mean and the variance for the probability distribution $p(\x_0|\xt)$. For the mean $\mubarxt$, it depends on $\xt$, so it must be regressed with a model. To do this, we will need a loss function, which we can start with
+\begin{equation}
+     \label{eq:7.5}
+     \mathbb{E}_{\x}[\x]=\argmin_{\bm{\mu}}\mathbb{E}_{\x}[\|\x-\bm{\mu}\|_2^2],
+\end{equation}
+from which we have
+\begin{align}
+    \mubarxt &= \mathbb{E}_{\x_0\sim  p(\x_0|\xt)}[\x_0] \nonumber \marginnote{\footnotesize{\textcolor{red}{This expression gives the formal definition of for the expectation value of $\x_0$, if we can draw sample from the distribution of$p(\x_0|\xt)$. }}}\\
+    \nonumber\\
+    \nonumber\\
+    &=\argmin_{\bm{\mu}}\mathbb{E}_{\x_0\sim  p(\x_0|\xt)} [\|\x_0-\bm{\mu}\|_2^2] \nonumber \marginnote{\footnotesize{\textcolor{red}{Applying \cref{eq:7.5}.}}}\\
+    &=\argmin_{\bm{\mu}(t)}\mathbb{E}_{\x_0\sim  p(\x_0|\xt),\xt\sim p(\xt)}[\|\x_0-\bm{\mu}(\xt)\|_2^2]  \nonumber \marginnote{\footnotesize{\textcolor{red}{Now we also need to sample $\xt$ as $\bm{\mu}(\xt)$ is a function of it}}}\\
+    &=\argmin_{\bm{\mu}(t)}\mathbb{E}_{\x_0\sim \tilde{p}(\x_0),\xt\sim p(\xt|\x0)}[\|\x_0-\bm{\mu}(\xt)\|_2^2]. \label{eq:7.6}
+\end{align}
+This is the target function for training $\bm{\mu}(\xt)$. If we introduce the parameterisation procedure as before, where we let
+\begin{equation}
+    \label{eq:7.7}
+    \bm{\mu}(\xt)=\frac{1}{\alphatbar}\left(\xt -\betatbar \bm{\varepsilon}_{\bm{\theta}}(\xt, t)\right),
+\end{equation}
+then, we recover the loss function for training the DDPM model, which is $\|\bm{\varepsilon}-\bm{\varepsilon}_{\bm{\theta}} (\alphatbar\x_0+\betatbar\bm{\varepsilon},t) \|_2^2$. So the procedure from optimising the mean leads  to the identical results as before.
+
+\subsection{Estimation of the variance: part I}
+Similar to the above discussions, the covariance matrix is given by
+\begin{align}
+    \bm{\Sigma}(\xt) &= \mathbb{E}_{\x_0\sim p(\x_0|\xt)}\left[ (\x_0-\mubarxt)(\x_0-\mubarxt)^{\mathsf{T}} \right]\nonumber \\
+    &= \mathbb{E}_{\x_0\sim p(\x_0|\xt)}\left[ \left( (\x_0\textcolor{red}{-\bm{\mu}})-(\mubarxt\textcolor{red}{-\bm{\mu}})  \right) \left( (\x_0\textcolor{red}{-\bm{\mu}})-(\mubarxt\textcolor{red}{-\bm{\mu}})  \right) ^{\mathsf{T}}\right]\nonumber\\
+    &=\mathbb{E}_{\x_0\sim p(\x_0|\xt)}\left[(\x_0-\bm{\mu}_0)(\x_0-\bm{\mu}_0)^{\mathsf{T}} \right] - (\mubarxt-\bm{\mu}_0)(\mubarxt-\bm{\mu}_0)^{\mathsf{T}}, \label{eq:7.8}
+\end{align}
+in which $\bm{\mu}_0$ is an arbitrary vector quantity. The last equation holds due to the translational invariance of the covariance matrix. 
+
+The above derivation gives us the full covariance matrix, but this is not what we want, since we would like to use $\mathcal{N}(\x_0;\mubarxt,\bar{\sigmat}^2\bm{I})$ to regress $p(\xtm|\xt)$, in which, by design, the covariance matrix is $\bar{\sigmat}^2\bm{I}$. The latter has two characters:
+\begin{myquote}
+    \begin{enumerate}
+        \item It is independent from $\xt$, as such, in order to eliminate its dependency on $\xt$, we can take the average over all $\xt$, such that $\bm{\Sigma}_t=\mathbb{E}_{\xt\sim p(\xt)}[\bm{\Sigma}(\xt)]$;
+        \item It is a multiple of the identity matrix, meaning we only need to consider the diagonal elements and take the mean of the trace, \emph{i.e.} $\bar{\sigmat}^2=\mbox{Tr}(\bm{\Sigma}_t)/d$, with $d=\dim (\x)$.
+    \end{enumerate}
+\end{myquote}
+In this case, we have 
+\begin{align}
+    \bar{\sigmat}^2&=\mathbb{E}_{\xt\sim p(\xt)}\mathbb{E}_{\x_0\sim p(\x_0|\xt)}\left[\frac{\|\x_0-\bm{\mu}_0 \|_2^2}{d}\right] - \mathbb{E}_{\xt\sim p(\xt)} \left[\frac{\| \mubarxt-\bm{\mu}_0 \|_2^2}{d} \right] \nonumber \\
+    &=\frac{1}{d}\mathbb{E}_{\x_0\sim \tilde{p}(\x_0)}\mathbb{E}_{\xt\sim p(\xt|\x_0)}\left[\|\x_0-\bm{\mu}_0 \|_2^2 \right] - \frac{1}{d} \mathbb{E}_{\xt\sim p(\xt)} \left[ \| \mubarxt-\bm{\mu}_0 \|_2^2 \right] \nonumber \\
+&=\frac{1}{d}\mathbb{E}_{\x_0\sim \tilde{p}(\x_0)}  \left[\|\x_0-\bm{\mu}_0 \|_2^2 \right]- \frac{1}{d} \mathbb{E}_{\xt\sim p(\xt)} \left[ \| \mubarxt-\bm{\mu}_0 \|_2^2 \right]\label{eq:7.9}
+\end{align}
+This is one possible analytical form of $\bar{\sigmat}^2$ that was derived by the author. When the model of $\mubarxt$ has been trained, it can be approximately evaluated by first sampling a series of samples $\x_0$ and $\xt$. Most importantly, if we select $\bm{\mu}_0=\mathbb{E}_{\x_0\sim\tilde{p}(\x_0)}[\x_0]$, then we have the following:
+\begin{equation}
+    \label{eq:7.10}
+     \bar{\sigmat}^2=\mbox{Var}[\x_0]-\frac{1}{d} \mathbb{E}_{\xt\sim p(\xt)} \left[ \| \mubarxt-\bm{\mu}_0 \|_2^2 \right].
+\end{equation}
+Here, $\mbox{Var}[\x_0]$ is the variance of the training data at the pixel level. If the pixel level falls into the range of $[a,b]$ for every pixel, then its variance will not be larger than $\left(\frac{b-a}{2}\right)^2$, such that we have the following inequality:
+\begin{equation}
+    \label{eq:7.11}
+    \bar{\sigmat}^2\leq \mbox{Var}[\x_0] \leq \left(\frac{b-a}{2}\right).
+\end{equation}
+
+\subsection{Estimation of the variance: part II}
+The above derivation is a relatively straightforward one that was came up by the author (J. Su). In the original Analytic-DPM paper, a slightly different, but less straightforward solution was given. Substituting \cref{eq:7.7} into the definition of the covariance matrix, we have
+\begin{align}
+    \bm{\Sigma}(\xt)&=\mathbb{E}_{\x_0\sim p(\x_0|\xt)} \left[(\x_0-\mubarxt) (\x_0-\mubarxt)^{\mathsf{T}} \right] \nonumber\\
+    &=\mathbb{E}_{\x_0\sim p(\x_0|\xt)} \left[ \left( \left(\x_0-\frac{\xt}{\alphatbar}\right)+\frac{\betatbar}{\alphatbar}\bm{\varepsilon}_{\bm{\theta}}(\xt,t) \right) \left( \left(\x_0-\frac{\xt}{\alphatbar}\right)+\frac{\betatbar}{\alphatbar}\bm{\varepsilon}_{\bm{\theta}}(\xt,t) \right)^{\mathsf{T}}  \right]\nonumber\\
+    &=\mathbb{E}_{\x_0\sim p(\x_0|\xt)} \left[  \left(\x_0-\frac{\xt}{\alphatbar}\right) \left(\x_0-\frac{\xt}{\alphatbar}\right)^{\mathsf{T}} \right] - \frac{\betatbar^2}{\alphatbar^2}\bm{\varepsilon}_{\bm{\theta}}(\xt,t)\bm{\varepsilon}_{\bm{\theta}}(\xt,t)^{\mathsf{T}}\nonumber\\
+    &=\frac{1}{\alphatbar^2}\mathbb{E}_{\x_0\sim p(\x_0|\xt)} \left[ (\xt-\alphatbar\x_0)(\xt-\alphatbar\x_0)^{\mathsf{T}} \right] -\frac{\betatbar^2}{\alphatbar^2}\bm{\varepsilon}_{\bm{\theta}}(\xt,t)\bm{\varepsilon}_{\bm{\theta}}(\xt,t)^{\mathsf{T}}.\label{eq:7.12}
+\end{align}
+Now we take the average over $\xt$ on both sides, we get
+\begin{align}
+    &\quad \mathbb{E}_{\xt\sim p(\xt)}\mathbb{E}_{\x_0\sim p(\x_0|\xt)}\left[ (\xt-\alphatbar\x_0)(\xt-\alphatbar\x_0)^{\mathsf{T}} \right]\nonumber\\
+    &=\mathbb{E}_{\x_0\sim\tilde{p}(\x_0)}\mathbb{E}_{\xt\sim p(\xt|\x_0)} \left[ (\xt-\alphatbar\x_0)(\xt-\alphatbar\x_0)^{\mathsf{T}} \right]. \label{eq:7.13}
+\end{align}
+Since $p(\xt|x_0)=\mathcal{N}(\xt;\alphatbar\x_0,\betatbar^2\bm{I})$, so $\alphatbar\x_0$ is the mean for the distribution $p(\xt|x_0)$, therefore, $\mathbb{E}_{\xt\sim p(\xt|\x_0)} \left[ (\xt-\alphatbar\x_0)(\xt-\alphatbar\x_0)^{\mathsf{T}} \right]$ is the covariance matrix for $p(\xt|x_0)$ which is obviously $\betatbar^2\bm{I}$. Therefore, 
+\begin{equation}
+    \label{7.14}
+    \mathbb{E}_{\x_0\sim\tilde{p}(\x_0)}\mathbb{E}_{\xt\sim p(\xt|\x_0)} \left[ (\xt-\alphatbar\x_0)(\xt-\alphatbar\x_0)^{\mathsf{T}} \right] = \mathbb{E}_{\x_0\sim\tilde{p}(\x_0)} [\betatbar^2\bm{I}]=\betatbar^2\bm{I}. 
+\end{equation}
+Furthermore, we have 
+\begin{equation}
+    \label{eq:7.15}
+    \bm{\Sigma}_t=\mathbb{E}_{\x\sim p(\xt)}[\bm{\Sigma}(\xt)]=\frac{\betatbar^2}{\alphatbar^2}\left(\bm{I}-\mathbb{E}_{\x\sim p(\xt)}\left[\bm{\varepsilon}_{\bm{\theta}}(\xt,t)\bm{\varepsilon}_{\bm{\theta}}(\xt,t)^{\mathsf{T}} \right]\right).
+\end{equation}
+Taking the trace and then dividing $d$ on both sides, we obtain the following upper limit:
+\begin{equation}
+    \label{eq:7.16}
+    \bar{\sigmat}^2=\frac{\betatbar^2}{\alphatbar^2}\left(1-\frac{1}{d}\mathbb{E}_{\x\sim p(\xt)} \left[ \| \bm{\varepsilon}_{\bm{\theta}}(\xt,t)\|_2^2\right] \right)\leq\frac{\betatbar^2}{\alphatbar^2},
+\end{equation}
+which is the original result from Analytic-DPM.
+
+\subsection{Further thoughts}
+Till this point, we have completely finished introducing Analytic-DPM. The entire derivation is a bit tricky but nonetheless, not too difficult and relatively clear in its logic. This is much friendly to be understood compared to the original paper, which completed the derivations using 7 pages involving 13 Lammas in the Appendix. 
+
+Surely, we admire the observations made by the original authors, who first obtained analytical solutions for the variance. However, the entire original derivation for Analytic-DPM is rather cumbersome and lack of inspirations. For example, the notation $\nabla_{\xt}p(\xt)$ had been used throughout the original paper, which causes three problems: Firstly, the whole derivation was not straightforward,  making it difficult to understand how the authors came up with the ideas in the first place. Secondly, it makes the understanding of score-matching a prerequisite. Finally, one must change  $\nabla_{\xt}p(\xt)$ back to either $\mubarxt$ or  $\bm{\varepsilon}_{\bm{\theta}}(\xt,t)$ in practical applications, which is an unnecessary detour. 
+
+The starting point for our derivations here, is to estimate the parameters for the normal distributions, which its moment estimation is the same as estimating the maximum likelihood. As such, we only need to estimate the corresponding mean and covariance. There is no real need to match the result with those in the score-matching scheme, since the baseline model for Analytic-DPM is DDIM, which the latter was not based on the score-matching model anyway. Hence it is not beneficial to derive the Analytic-DPM results using the score-matching formalism both theoretically and practically. Using $\mubarxt$ or  $\bm{\varepsilon}_{\bm{\theta}}(\xt,t)$ directly in the derivation, leads to more obvious mathematical form, and much straightforward for numerical implementation.
