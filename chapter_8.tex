@@ -1,1 +1,108 @@
 \section{Optimum Estimation of the Variance (Part II)}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9246}}}
+
+In the previous section, we have introduced the framework of Analytic-DPM, which leads to an optimum estimation of the variance in the diffusion model that has already been trained. More importantly, the optimum variance was derived as an analytical solution. Numerical experimentations showed that this newly estimated optimum variance could indeed lead to improved qualities of the samples that are generated from the diffusion models. 
+
+In this section, we will continue to discuss the upgraded version of Analytic-DPM. This idea came from the paper entitled ``\emph{Estimating the Optimum Covariance with Imperfect Mean in Diffusion Probabilistic Models}''\cite{bao2022estimating} published by the same team, and it was referred to as the \textbf{Extended-Analytic-DPM}, a term that will also be used here.
+
+\subsection{Revisiting the results}
+
+We had, in the previous section, started from DDIM, and derived the optimum variance for the generation process being
+\begin{equation}
+    \label{eq:8.1}
+    \sigmat^2+\gamma_t^2 \sigmatbar^2,
+\end{equation}
+in which $\sigmatbar$ is the variance for $p(\x_0|\xt)$. It has the following estimate (from the second approach):
+\begin{equation}
+    \label{eq:8.2}
+    \bar{\sigmat}^2=\frac{\betatbar^2}{\alphatbar^2}\left(1-\frac{1}{d}\mathbb{E}_{\x\sim p(\xt)} \left[ \| \bm{\varepsilon}_{\bm{\theta}}(\xt,t)\|_2^2\right] \right).
+\end{equation}
+In retrospect, it was not difficult to come up with such a result. Let us assume that 
+\begin{equation}
+\label{eq:8.3}
+    \mubarxt =\frac{1}{\alphatbar}\left(\xt-\betatbar\bm{\varepsilon}_{\bm{\theta}}(\xt,t) \right)
+\end{equation}
+has already provided us with an accurate estimate of the mean vector for the distribution $p(\x_0|\xt)$, then according to the definition of the covariance matrix:
+\begin{align}
+    \bm{\Sigma}(\xt)&=\mathbb{E}_{\x_0\sim p(\x_0|\xt)} \left[(\x_0-\mubarxt) (\x_0-\mubarxt)^{\mathsf{T}} \right] \nonumber\\
+    &=\frac{1}{\alphatbar^2}\mathbb{E}_{\x_0\sim p(\x_0|\xt)} \left[ (\xt-\alphatbar\x_0)(\xt-\alphatbar\x_0)^{\mathsf{T}} \right] -\frac{\betatbar^2}{\alphatbar^2}\bm{\varepsilon}_{\bm{\theta}}(\xt,t)\bm{\varepsilon}_{\bm{\theta}}(\xt,t)^{\mathsf{T}}.\label{eq:8.4}
+\end{align}
+To remove the explicit dependency on $\xt$, we then take the average over $\xt\sim p(\xt)$, which gives
+\begin{equation}
+    \label{eq:8.5}
+    \bm{\Sigma}_t=\mathbb{E}_{\x\sim p(\xt)}[\bm{\Sigma}(\xt)]=\frac{\betatbar^2}{\alphatbar^2}\left(\bm{I}-\mathbb{E}_{\x\sim p(\xt)}\left[\bm{\varepsilon}_{\bm{\theta}}(\xt,t)\bm{\varepsilon}_{\bm{\theta}}(\xt,t)^{\mathsf{T}} \right]\right).
+\end{equation}
+If we then tool the trace of the diagonal element and average it over the matrix dimension, \emph{i.e.} $\sigmatbar^2=\mbox{Tr}(\bm{\Sigma}_t)/d$, then we recover the scalar variance, as given in \cref{eq:8.2}.
+
+\subsection{Different approaches to improve the results}
+
+Before we formally introduce the Extended-Analytic-DPM, we can briefly reflect, are there any other rooms to improve Analytic-DPM? Actually there are quite a few possible improvements.
+
+For example, in Analytic-DPM, we assumed that the normal distribution that we used to approximate $p(\x_0|\xt)$ has a covariance matrix of $\sigmat^2\bm{I}$, in which all the diagonal matrix elements are identical. The most trivial improvement would be to make the diagonal elements different from each other, i.e. $\mbox{diag}(\bar{\bm{\sigma}}_t^2)$. Here, we restrict the vector multiplications are all being carried out with the Hamamard product, for example, $\x^2=\x\otimes\x$. In this case, we only need to consider the diagonal part of $\bm{\Sigma}_t$, and from \cref{eq:8.5}, the corresponding estimate for the variance is
+\begin{equation}
+    \label{eq:8.6}
+    \bar{\bm{\sigma}}_t^2=\frac{\betatbar^2}{\alphatbar^2}\left(\bm{1}_d-\mathbb{E}_{\x\sim p(\xt)}\left[\bm{\varepsilon}_{\bm{\theta}}^2(\xt,t) \right]\right),
+\end{equation}
+in which $\bm{1}_d$ is a $d$-dimensional unit vector. A further improvement is to retain the dependency of $\bar{\bm{\sigma}}_t^2$ on $\xt$, \emph{i.e.} we consider $\bar{\bm{\sigma}}_t^2(\xt)$, making it similar to $\mubarxt$, which now $\bar{\bm{\sigma}}_t^2(\xt)$ also becomes a learnable model on the input $\xt$.
+
+On the other hand, can we consider using the full matrix of $\bm{\Sigma}_t$? This is workable only in principle but not very practical. This is because $\bm{\Sigma}_t$ is a $(d\times d$ matrix. For high resolution images, as $d$ is the total number of pixels, it makes the storage and computation of such a large matrix very costly.
+
+However, as $\mubarxt$ is learnt from the model, it may not be able to accurately  represent $\mathbb{E}_{\x\sim p(\x_0|\xt)}[\x_0]$. This is the meaning of the \textbf{imperfect mean} in the title for the Extended-Analytic-DPM paper. Therefore, it would be more meaningful and practical to further improve the model under the ideal of imperfect mean.
+
+\subsection{Maximum likelihood}
+\marginnote{\footnotesize{\textcolor{red}{The key idea here is, since we know $\x0$, and thus $\tilde{p}(\x_0)$ very well, we should seek an estimate of $\sigmatbar$ directly from sampling $\x_0$ rather than sample from $\xt$ and map it back to $\x_0$.}}}
+
+Suppose the model for the mean $\mubarxt$ has been trained, then, in the distribution $p(\x_0|\xt)\sim\mathcal{N}(\x_0;\mubarxt,\sigmatbar^2\bm{I})$, the only remaining parameter will be $\sigmatbar^2$. The corresponding negative log-likelihood is
+\begin{align}
+    &\quad \mathbb{E}_{\xt\sim p(\xt)}\mathbb{E}_{\x_0\sim p(\x_0|\xt)} \left[-\log \mathcal{N}(\x_0;\mubarxt,\sigmatbar^2\bm{I}) \right]  \nonumber\\
+    &=\frac{1}{2\sigmatbar^2}\mathbb{E}_{\xt,\x_0\sim p(\xt|\x_0)\tilde{p}(\x_0)}\left[\|\x_0-\mubarxt\|_2^2\right] +\frac{d}{2}\log\sigmatbar^2+\frac{d}{2}\log 2\pi, \label{eq:8.7}
+\end{align}
+for which the minimum is reached when \marginnote{\footnotesize{\textcolor{red}{This also seems to be the formal definition for the variance.}}}
+\begin{equation}
+    \label{eq:8.8}
+    \sigmatbar^2=
+    \frac{1}{d}\mathbb{E}_{\xt,\x_0\sim p(\xt|\x_0)\tilde{p}(\x_0)}\left[\|\x_0-\mubarxt\|_2^2\right].
+\end{equation}
+Here, $\mubarxt$ may not be sufficiently accurate, so the second equality in \cref{eq:8.4} does not really hold, we can only work from the first equality in \cref{eq:8.4}, so we substitute \cref{eq:8.3} into \cref{eq:8.8} and we reached:
+\begin{equation}
+    \label{eq:8.9}
+    \sigmatbar^2=\frac{\betatbar^2}{\alphatbar^2 d}\mathbb{E}_{\x_0\sim\tilde{p}(\x_0),\bm{\varepsilon}\sim\normdist} \left[\| \bm{\varepsilon} -\bm{\varepsilon}_{\bm{\theta}} (\alphatbar\x_0+\betatbar\bm{\varepsilon},t) \|_2^2 \right].
+\end{equation}
+This is the result when the covariance matrix is a scaled identity matrix, \emph{i.e.}, $\sigmatbar^2\bm{I}$. For a more general case where the covariance matrix is a diagonal one, \emph{i.e.}, $\mathcal{N}(\x_0;\mubarxt,\mbox{diag}(\bm{\sigmatbar}^2))$, the corresponding result is:
+\begin{equation}
+    \label{eq:8.10}
+    \bar{\bm{\sigma}}_t^2=\frac{\betatbar^2}{\alphatbar^2 }\mathbb{E}_{\x_0\sim\tilde{p}(\x_0),\bm{\varepsilon}\sim\normdist} \left[\| \bm{\varepsilon} -\bm{\varepsilon}_{\bm{\theta}} (\alphatbar\x_0+\betatbar\bm{\varepsilon},t) \|_2^2 \right].
+\end{equation}
+
+
+\subsection{Conditional variance}
+If we want to obtain the covariance $\mbox{diag}(\bar{\bm{\sigma}}_t^2(\xt))$ that is conditioned on $\xt$, then we need to eliminate the step that takes the average over $\xt$, from which we get
+\begin{equation}
+    \label{eq:8.11}
+    \bar{\bm{\sigma}}_t^2(\xt)=\mathbb{E}_{\x_0\sim p(\x_0|\xt)}[(\x_0-\mubarxt)^2]=\frac{\betatbar^2}{\alphatbar^2 }\mathbb{E}_{\x_0\sim p(\x_0|\xt)}\left[ \left( \bm{\varepsilon}_t-\bm{\varepsilon}_{\bm{\theta}}(\xt,t)  \right)^2 \right],
+\end{equation}
+ in which $\bm{\varepsilon}_t=(\xt-\alphatbar\x_0)/\betatbar$. Same as in the previous section, taking the use of 
+ \begin{equation}
+     \label{eq:8.12}
+     \mathbb{E}_{\x}[\x]=\argmin_{\bm{\mu}}\mathbb{E}_{\x}[\|\x-\bm{\mu}\|_2^2],
+ \end{equation}
+we get the following
+\begin{align}
+    \bar{\bm{\sigma}}_t^2(\xt) &= \frac{\betatbar^2}{\alphatbar^2 }\mathbb{E}_{\x_0\sim p(\x_0|\xt)}\left[ \left( \bm{\varepsilon}_t-\bm{\varepsilon}_{\bm{\theta}}(\xt,t)  \right)^2 \right]\nonumber\\
+    &=\frac{\betatbar^2}{\alphatbar^2 } \argmin_{\bm{g}}\mathbb{E}_{\x_0\sim p(\x_0|\xt)}\left[  \| \left( \bm{\varepsilon}_t-\bm{\varepsilon}_{\bm{\theta}}(\xt,t)  \right)^2 - \bm{g}\|_2^2\right]\nonumber\\
+    &= \frac{\betatbar^2}{\alphatbar^2 } \argmin_{\bm{g}(\xt)}\mathbb{E}_{\xt\sim p(\xt)}\mathbb{E}_{\x_0\sim p(\x_0|\xt)}\left[  \| \left( \bm{\varepsilon}_t-\bm{\varepsilon}_{\bm{\theta}}(\xt,t)  \right)^2 - \bm{g}(\xt)\|_2^2\right]\nonumber\\
+    &=\frac{\betatbar^2}{\alphatbar^2 } \argmin_{\bm{g}(\xt)}\mathbb{E}_{\xt,\x_0\sim p(\xt|\x_0)\tilde{p}(\x_0)} \left[  \| \left( \bm{\varepsilon}_t-\bm{\varepsilon}_{\bm{\theta}}(\xt,t)  \right)^2 - \bm{g}(\xt)\|_2^2\right] \label{eq:8.13}.
+\end{align}
+ This is the ``NPR-DPM'' scheme for learning the conditional variance in the Extended-Analytic-DPM. In addition, the paper also introduced another variance estimation scheme, dubbed ``SN-DPM'', which was based on the assumption of a ``perfect mean'' rather than an imperfect one. However, the result shows that SN-DPM gives better results than NPR-DPM. What this means is that even though the paper was originally designed to solve the imperfect mean problem, the better results of SN-DPM suggests that the perfect mean is more close to practical realisms, such that the problem of imperfect mean is somehow meaningless.
+ 
+\subsection{Two stages}
+It was mentioned in the paper ``\emph{Improved Denoising Diffusion Probabilistic Models}''\cite{nichol2021improved} that, by treating the covariance as a learnable will increase the difficulty in model training. In this case, why we need to train another model for the variance in the Extended-Analytic-DPM? 
+
+In the DDPM framework, there exist two possible choices for the variance, namely $\sigmat=(\betatmbar/\betatbar)\betat$ and $\sigma_t=\beta_t$, which can already provide reasonably good generative outcomes. In such case, further fine tuning the variance will not affect the generative outcomes significantly, at least for a generative process with a large number of steps. The model training, in this case, should still be focusing on learning the mean $\mubarxt$. On the other hand, if both the mean and variance are learnt simultaneously, then, as the training progresses, the constantly changing variance can interfere with the learning of the mean, which violates the goal to focus on training the mean $\mubarxt$.
+
+The Extended-Analytic-DPM has devised a genius solution to overcome the problem through a two-staged approach, in which the original variance was used to train the model for the mean $\mubarxt$, then the trained model was fixed, and some of its parameters were used to train another model for the variance. The main advantages of this approach are:
+\begin{enumerate}
+    \item Reducing the number of parameters and the corresponding training costs.
+    \item Enabling the re-usage of the pre-trained model for the mean, and
+    \item Acheiving a more stable training process.
+\end{enumerate}
