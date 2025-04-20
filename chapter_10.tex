@@ -1,1 +1,118 @@
 \section{Unified Diffusion Model: The Theoretical Framework}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9262}}}
+
+Through the previous sections, we had provided a thorough introduction to the diffusion generative models. It can be seen that  there were a lot of theoretical contents involved. Nevertheless, it is clear that in all previous derivations, we have primarily been focusing on diffusion models that dealt with samples that were continuous, and the forward process was built upon a noising process draws noises from a standard normal distribution. In this section, we hope to establish a framework of Unified Diffusion Model (UDM) that may overcome the above limitations, in which
+\begin{myquote}
+\begin{enumerate}
+    \item We impose no restriction on the the type of the samples, it can be either discrete or continuous.
+    \item We impose no restriction on how to realise the forward process. It could be noising, blurring, masking or deletions.
+    \item We impose no restriction on the nature of the time variable $t$, it can be either discrete or continuous.
+    \item It will include all the known results, including DDPM, DDIM, SDE and ODE that had been discussed previously.
+\end{enumerate}
+\end{myquote}
+It is the aim of this section that we will develop a unified framework that satisfies the above desires.
+
+\subsection{The forward process}
+
+From the discussions in the previous sections, it is clear that, in order to build a diffusion model, we will need three components, namely, the forward deconstruction process, the reverse reconstruction process and a loss function for training. In this subsection, we begin our analysis on the forward process. 
+
+In the earliest DDPM model, the forward process was established based on the transition probability $p(\xt|\xtm)$. In the subsequent works on DDIM, it was realised that both the training targets and the generative process do not have any direct connection with $p(\xt|\xtm)$, but the probability $p(\xt|\x_0)$. It was also found that, to derive $p(\xt|\x_0)$ from $p(\xt|\xtm)$ was also rather difficult. Therefore, \textbf{a more practical approach is to directly treat} $p(\xt|\x_0)$ \textbf{as the forward process.}
+
+The main purpose of establishing $p(\xt|\x_0)$ is to build the training data for the diffusion model, so \textbf{the basic requirement for} $p(\xt|\x_0)$ \textbf{is that sampling from such a distribution must be easy}. For this purpose, we could re-parameterise the forward process as 
+\begin{equation}
+    \label{eq:10.1}
+    \xt=\mathcal{F}_t(\x_0,\bm{\varepsilon}),
+\end{equation}
+in which $\mathcal{F}$ is a function of $t$, $\x_0$ and $\bm{\varepsilon}$. In particular, $\bm{\varepsilon}$ is a random variable that is sampled from some standard distribution $q(\bm{\varepsilon})$, with normal distribution being the most common choice, although other distributions are also feasible. It could be anticipated that \cref{eq:10.1} is \textbf{a generalisation of the forward process that includes all possible transformations from $\x_0$ to $\xt$, without any restriction on the data type}. Generally, the only restriction is imposed on $t$, such that the smaller the time variable $t$ is, $\mathcal{F}_t(\x_0,\bm{\varepsilon})$ will contain more information about $\x_0$, and it becomes easier to reconstruct $\x_0$ from $\mathcal{F}_t(\x_0,\bm{\varepsilon})$. Conversely, it becomes more difficult to reconstruct $\x_0$ at large $t$. At a certain upper limit $T$, $\mathcal{F}_T(\x_0,\bm{\varepsilon})$ will contain almost  no information about $\x_0$, from which it becomes literally impossible to reconstruct $\x_0$.
+
+\subsection{The reverse process}
+
+In the reverse process, we aim to generate realistic samples through multiple steps of denoising. The key quantity involves is the reverse transition probability $p(\xtm|\xt)$.
+\marginnote{\footnotesize{\textcolor{red}{Reminder: The advantage of writing $p(\xtm|\xt)$ in this integral form is that, the conditional probability $p(\xtm|\xt,\x_0)$ has a much well defined solution space, and we can approximate $p(\x_0|\xt)$ with $q(\xt|\x_0)$ from the forward process.}}} In general, we have the following:
+\begin{equation}
+    \label{eq:10.2}
+    p(\xtm|\xt)=\int p(\xtm|\xt,\x_0)p(\x_0|\xt) d\x_0.
+\end{equation}
+If $\x_0$ are discrete data, then we can write \cref{eq:10.2} equivalently by changing the integral into a discrete summation. Since we would like the sampling from $p(\xtm|\xt)$ to be easy to achieve numerically, we will also require the sampling from both $p(\xtm|\xt,\x_0)$ and $p(\x_0|\xt)$ to be easy. In this case, the sampling from the distribution $p(\xtm|\xt)$ can be achieved via the following procedure:
+\begin{equation}
+    \label{eq:10.3}
+    \hat{\x}_0\sim p(\x_0|\xt) \quad \& \quad \xtm\sim p(\xtm|\xt,\x_0=\hat{\x}_0) \quad \to \quad p(\xtm|\xt).
+\end{equation}
+From this formalism, every sampling step $\xt\to\xtm$ contains two sub-steps:
+\begin{myquote}
+\begin{enumerate}
+        \item \textbf{Estimation}: make an estimate of $\x_0$ from  $p(\x_0|\xt)$.
+        \item \textbf{Correction}: put the estimated $\x_0$ into $p(\xtm|\xt,\x_0)$, which will be incorporated with $p(\x_0|\xt)$ to obtain $p(\xtm|\xt)$.
+\end{enumerate}
+\end{myquote}
+Hence, reverse sampling is an iterative process of estimation followed by correction. By iteratively incorporating the estimate of $\xt\to\x_0$ into the reverse process, we obtain the corrected regression sequence of $\x_T\to\cdots\xt\to\xtm\to\cdots\to\x_0$. This breaks the generative process, which is difficult to be achieved in one-shot, into many sequentially dependent small steps.
+
+\subsection{Training target}
+
+Of course, this proposed reverse sampling process is rather abstractive, as we do not have any knowledge on the distributions of either $p(\xtm|\xt,\x_0)$ or $p(\x_0|\xt)$. In this subsection, we will discuss the choice of $p(\x_0|\xt)$. Obviously, $p(\x_0|\xt)$ is the probabilistic model that allows one to predict $\x_0$ from $\xt$, and it must be a distribution that is easy to be calculated and sampled from. When $\x_0$ is continuous data, there are not many choices of suitable distributions, and the most common choice is a normal distribution with a trainable mean:
+\begin{equation}
+    \label{eq:10.4}
+    p(\x_0|\xt)\approx q(\xt|\x_0)=\mathcal{N}(\x_0;\mathcal{G}_{t}(\xt),\sigmatbar^2\bm{I}).
+\end{equation}
+To reduce the training cost, we usually do not treat the standard deviation $\sigmatbar^2$ as a trainable, but using the approaches outlined in \cref{sect7:variance_I} to estimate it afterward. On the other hand, when $\x_0$ are discrete data, we can use either auto-regressive or non-auto-regressive language models (Seq2Seq) to build our model. Both building the probabilistic models and samplings are relatively much easier for discrete samples. With a concrete form of $q(\x_0|\xt)$, the training target is easy to establish. A natural choice is to use the cross-entropy
+\marginnote{\footnotesize{\textcolor{red}{Reminder: The cross-entropy between two distributions $p(x)$ and $q(x)$ is defined as $-\mathbb{E}_{x\sim p(x)}[\log q(x)]=-\int p(x)\log q(x)dx$, in which $\mathbb{E}_{x\sim p(x)}$ represents the expectation value taken over the true data distribution. In this case, \cref{eq:10.5} is trying to minimise the discrepancy between the distribution $p(\x_0|\xt)$ that is what we try to learn and the true distribution $q(\xt|\x0)$ from training data generated from forward process.}}}
+\begin{equation}
+    \label{eq:10.5}
+    \mathbb{E}_{\x_0\sim\tilde{p}(\x_0),\xt\sim p(\xt|\x_0)}[-\log q(\x_0|\xt)]=\mathbb{E}_{\x_0\sim\tilde{p}(\x_0),\bm{\varepsilon}\sim q(\bm{\varepsilon})}[-\log q(\x_0|\mathcal{F}_{t}(\x_0,\bm{\varepsilon}))].
+\end{equation}
+As such, this solves the problem of estimating $p(\x_0|\xt)$ and designing the corresponding training target. If $q(\x_0|\xt)$ follows the normal distribution, then after eliminating the constants, the training target simplifies to
+\begin{equation}
+    \label{eq:10.6}
+\mathbb{E}_{\x_0\sim\tilde{p}(\x_0),\bm{\varepsilon}\sim q(\bm{\varepsilon})}\left[ \frac{1}{2\sigmat^2}\left\| \x_0-\mathcal{G}_t(\mathcal{F}_{t} (\x_0,\bm{\varepsilon}) ) \right\|_2^2 \right].
+\end{equation}
+
+\subsection{Conditional probability}
+Now we are left with the term $p(\xtm|\xt,\x_0)$ [in \cref{eq:10.2}] to be dealt with, which is the probability of estimating $\xtm$ from $\xt$ and $\x_0$. There is also some room for designing this probability distribution. However, any given distributions for $p(\xtm|\xt,\x_0)$ must satisfy the following equality for marginal distribution:
+\begin{equation}
+    \label{eq:10.7}
+    \int p(\xtm|\xt,\x_0 )p(\xt|\x_0)d\xt = p(\xtm|\x_0).
+\end{equation}
+Obviously, the simplest choice that satisfies the above constrain is to let
+\begin{equation}
+    \label{eq:10.8}
+    p(\xtm|\xt,\x_0 ) = p(\xtm|\x_0),
+\end{equation}
+which means now we have made $p(\xtm|\xt,\x_0 )$ become completely independent from $\xt$. In principle, there is no problem of making such a choice. However, the generated outcome based on such a simplification is usually not very good. This is because $\xtm$ now becomes completely dependent upon $\x_0$, which represents the original sample. In the reverse process, however, we can only sample $\x_0$ approximately from the approximated distribution of $q(\x_0|\xt)$. Since $q(\x_0|\xt)$ is usually not very accurate, errors in the generative process will continuously accumulate throughout. At the same time, the distribution $p(\xtm|\x_0)$ will carry noises in the sampling process, which may significantly affect the estimated $\hat{\x}_0$, thus worsening the generative outcomes.
+
+Fortunately, under most situations, we can derive a new result based on this simple choice of $p(\xtm|\xt,\x_0 ) = p(\xtm|\x_0)$. Based on \cref{eq:10.1}, we have the following:
+\begin{align}
+    \xtm\sim p(\xtm|\x_0) \quad &\Leftrightarrow \quad \xtm=\mathcal{F}_{t-1}(\x_0,\bm{\varepsilon})\nonumber\\
+    \xt\sim p(\xt|\x_0)\quad &\Leftrightarrow\quad \xt=\mathcal{F}_{t}(\x_0,\bm{\varepsilon}). \label{eq:10.9}
+\end{align}
+Assuming that $\mathcal{F}_{t}(\x_0,\bm{\varepsilon})$ is an invertible function of $\bm{\varepsilon}$, then we have the solution $\bm{\varepsilon}=\mathcal{F}_t^{-1}(\x_0,\xt)$. With this, we can now replace $\bm{\varepsilon}$ in $\mathcal{F}_{t-1}(\x_0,\bm{\varepsilon})$, which gives us
+\begin{equation}
+    \label{eq:10.10}
+    \xtm = \mathcal{F}_{t-1}(\x_0,\mathcal{F}_t^{-1}(\x_0,\xt)),
+\end{equation}
+which is equivalent to\marginnote{\footnotesize{\textcolor{red}{This result is analogous to the general expression for $p(\xtm|\xt,\x_0 )$ in \cref{eq:4.7} from DDIM. }}}
+\begin{equation}
+    \label{eq:10.11}
+    p(\xtm|\xt,\x_0 ) = \delta\left(\xtm - \mathcal{F}_{t-1}(\x_0,\mathcal{F}_t^{-1}(\x_0,\xt)) \right).
+\end{equation}
+
+
+This is a design of $p(\xtm|\xt,\x_0 ) $ that simultaneously depends on both $\x_0$ and $\xt$, in which some dependency of $\xtm$ on $\x_0$ has been spread to $\xt$, and we also eliminated the noise, such that we have a more stabilised reversed process to achieve better generative outcomes. Furthermore, if $q(\bm{\varepsilon})$ was a normal distribution, we may arrive at a more general result. Based on the superposition of normal distributions, we get
+\begin{equation}
+    \label{eq:10:12}
+    \xtm=\mathcal{F}_{t-1}(\x_0,\bm{\varepsilon})\quad\Leftrightarrow\quad \xtm=\mathcal{F}_{t-1}\left(\x_0, \sqrt{1-\tilde{\sigma}_t^2}\bm{\varepsilon}_1+ \tilde{\sigma}_t\bm{\varepsilon}_2\right).
+\end{equation}
+In this case, the solution of $\varepsilon$ from $\x_0$ and $\xt$ can only be used to substitute one of $\bm{\varepsilon}_1$ and $\bm{\varepsilon}_2$. The final sampling process follows:
+\begin{equation}
+    \label{eq:10.13}
+    \xtm=\mathcal{F}_{t-1}\left(\x_0, \sqrt{1-\tilde{\sigma}_t^2} \mathcal{F}_t^{-1}(\x_0,\xt) + \tilde{\sigma}_t\bm{\varepsilon}\right).
+\end{equation}
+
+\subsection{The thought process}
+
+By now, we have completed the building of a unified theoretical framework for the diffusion generative model. In the next section, we will provide some concrete examples of how to derive the results of the existing diffusion models from this unified framework, as well as some new outcomes from the new framework. Here, we will provide some further analysis on the derivation process that has been presented in this section.
+
+Some readers may feel confused with the derivations here. This is because it was established based on author's understanding on all the theoretical details of the diffusion model that have been discussed in the previous nine sections, from which a unified framework may be established. It is not technically challenging but logically not trivial to be understood. Fore-mostly, our goal is to design a unified theoretical framework that satisfies the targets outlined at the beginning of this section. The key in our design is to \textbf{understand and control parts of the model that can be freely adjusted and those that must be fixed under certain constraints.}
+
+More specifically, for those readers who are familiar with the diffusion model, they would appreciate that the core idea behind the diffusion model is to ``\emph{learn how to reconstruct from destruction}''. As such, we could choose any arbitrary destruction protocols in theory, but must be able to learn how to reconstruct from it. Nevertheless, the destruction process is not completely free of constraints. Generally, one must destruct the samples progressively in order for us to learn how to rebuild them, also progressively. This allows us to design the forward destruction process as presented in \cref{eq:10.1}, where $\mathcal{F}$ can be any destruction protocol and $t$ represents the progress of the destruction process. There is no specific constraints on the type of the original data $\x_0$. Finally, $\bm{\varepsilon}$ encodes the random factor that may exist in the forward process. With these, we have established the most generic form of the destruction process.
+
+As for the backward reconstruction process, we first deconstructed $p(\xtm|\xt)$ with \cref{eq:10.2} derived from the probability theory, which can be regarded as a constraint. How did it come up? In retrospect, since the forward process follows $\x_0\to\xt$, then it is natural to match it with the reverse process with $\xt\to\x_0$. \cref{eq:10.2} contains two parts, in which $p(\x_0|\xt)$ is very clear, it represents the probability of predicting $\x_0$ from $\xt$, which does not have much room for further simplification and can only be acquired from a learnable model. The freedom comes from $p(\xtm|\xt,\x_0)$, which must be a distribution that is easy to be sampled from, while satisfying the constraint imposed by \cref{eq:10.7} from the probability theory, which had taken the author a rather long time to come up with a satisfactory solution.
