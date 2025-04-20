@@ -1,1 +1,167 @@
 \section{Unified Diffusion Model: Applications}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9271}}}
+
+In the previous section, we have tried to establish a UDM, which allows the application of a more generic diffusion model and data type. In this section, we will be providing some concrete examples to showcase how we may achieve our model design targets.
+
+\subsection{Recap on the general framework}
+Firstly, UDM builds the forward process by choosing a suitable noise distribution $q(\bm{\varepsilon})$ and a transformation $\mathcal{F}$:
+\begin{equation}
+    \label{eq:11.1}
+\xt=\mathcal{F}_t(\x_0,\bm{\varepsilon}),\qquad \bm{\varepsilon}\sim q(\bm{\varepsilon}).
+\end{equation}
+Then, through the following partition 
+\begin{equation}
+    \label{eq:11.2}
+    \hat{\x}_0\sim p(\x_0|\xt)\quad \& \quad \xtm\sim p(\xtm|\xt,\x_0=\hat{\x}_0),
+\end{equation}
+we will achieve the sampling $\xtm\sim p(\xtm|\xt)$ in the reverse process. Here $p(\x_0|\xt)$ is the probability of estimating $\x_0$ from $\xt$, which we can generally approximate it with a simple distribution such as $q(\x_0|\xt)$. In this case, the corresponding training target will be $-\log q(\x_0|\xt)$ or some simple variants of it. When $\x_0$ is of the continuous type, we can choose the conditional normal distribution for $q(\x_0|\xt)$. When $\x_0$ are discrete data, we could approximate $q(\x_0|\xt)$ with either an autoregressive or a non-autoregressive model.
+
+As for the conditional distribution $p(\xtm|\xt,\x_0)$, the most basic choice is
+\begin{equation}
+    \label{eq:11.3}
+    p(\xtm|\xt,\x_0) =p(\xtm|\x_0) \quad \Leftrightarrow \quad \xtm=\mathcal{F}_{t-1}(\x_0,\bm{\varepsilon}).
+\end{equation}
+From this starting point, we can arrive at different results under different assumptions. When $\mathcal{F}_t(\x_0,\bm{\varepsilon})$ is an invertible function of $\bm{\varepsilon}$, we can get a solution of $\bm{\varepsilon}=\mathcal{F}_t^{-1}(\x_0,\xt)$, from which we can establish a sampling process with better certainties:
+\begin{equation}
+    \label{eq:11.4}
+    \xtm = \mathcal{F}_{t-1}(\x_0,\mathcal{F}_t^{-1}(\x_0,\xt)).
+\end{equation}
+Moving one step forward, if $q(\bm{\varepsilon})$ is a standard normal distribution, then we have 
+\begin{equation}
+    \label{eq:11.5}
+    \xtm=\mathcal{F}_{t-1}\left(\x_0, \sqrt{1-\tilde{\sigma}_t^2} \mathcal{F}_t^{-1}(\x_0,\xt) + \tilde{\sigma}_t\bm{\varepsilon}\right).
+\end{equation}
+
+\subsection{Hot diffusion}
+Here, we shall first prove that the concept of \emph{hot diffusion} is a special case of UDM, which corresponds to the mainstream diffusion models such as DDPM and DDIM. This idea came from the paper that introduced \emph{cold diffusion}, which will be discussed next.
+
+In the mainstream diffusion models, we are primarily dealing with continuous data, in which the forward process corrupts the data by adding Gaussian noise:\marginnote{\footnotesize{\textcolor{red}{Note how such a choice corresponds to an invertible function $\mathcal{F}$ of the noise $\bm{\varepsilon}$.}}}
+\begin{equation}
+    \label{eq:11.6}
+\xt=\alphatbar\x_0+\betatbar\bm{\varepsilon},\qquad \bm{\varepsilon}\sim\normdist,
+\end{equation}
+and subsequently we choose $\mathcal{N}(\x_0;\mubarxt,\sigmatbar\bm{I})$ for $q(\x_0|\xt)$. Generally, we do not treat $\sigmatbar$ as a trainable parameter, such that when we ignore the constant term, we arrive at the following target function:
+\begin{equation}
+    \label{eq:11.7}
+    -\log q(\x_0|\xt)=\frac{1}{2\sigmatbar^2}\|\x_0-\mubarxt \|_2^2.
+\end{equation}
+If we further introduce the parameterisation of $\mubarxt=\frac{1}{\alphatbar}(\xt-\betatbar\bm{\varepsilon}_{\bm{\theta}}(\xt,t))$ and combine with $\xt=\alphatbar\x_0+\betatbar\bm{\varepsilon}$, then we have
+\begin{equation}
+    \label{eq:11.8}
+    -\log q(\x_0|\xt)=\frac{\betatbar^2}{2\sigmatbar^2\alphatbar^2}\|\bm{\varepsilon}- \bm{\varepsilon}_{\bm{\theta}}(\alphatbar\x_0+\betatbar\bm{\varepsilon},t)\|_2^2.
+\end{equation}
+Numerical experiments shows that the performance is even better if we ignore the prefactor, such that the final training target is $\|\bm{\varepsilon}- \bm{\varepsilon}_{\bm{\theta}}(\alphatbar\x_0+\betatbar\bm{\varepsilon},t)\|_2^2$. The choices of the standard derivations follows the discussions in \cref{sect_4:DDIM} and \cref{sect8:variance_II}. Finally, for the distribution of $p(\xtm|\xt,\x_0)$, we have
+\begin{align}
+    \xtm&= \alphatmbar\x_0+\betatmbar\bm{\varepsilon} \nonumber\\
+    &\sim\alphatmbar\x_0+\sqrt{\betatmbar^2-\sigmatbar^2}\bm{\varepsilon}_1+\sigmat\bm{\varepsilon}_2, \label{eq:11.10}
+\end{align}
+in which $\bm{\varepsilon}$, $\bm{\varepsilon}_1$ and $\bm{\varepsilon}_2\sim\normdist$. From $\xt=\alphatbar\x_0+\betatbar\bm{\varepsilon}$, we have $\bm{\varepsilon}=(\xt-\alphatbar\x_0)/\betatbar$, which can be used for substituting $\bm{\varepsilon}_1$. This leads to the following general from of $p(\xtm|\xt,\x_0)$:
+\begin{equation}
+    \label{eq:11.10}
+    \xtm = \alphatmbar\x_0+ \sqrt{\betatmbar^2-\sigmatbar^2}\frac{\xt-\alphatbar\x_0}{\betatbar}+\sigmatbar\bm{\varepsilon},\qquad \bm{\varepsilon}\sim\normdist.
+\end{equation}
+On the other hand, $\hat{\x_0}\sim p(\x_0|\xt)$ implies that 
+\begin{equation}
+    \label{eq:11.11}
+    \hat{\x_0}=\mubarxt+\sigmatbar\bm{\varepsilon}=\frac{1}{\alphatbar}\left(\xt-\betatbar \bm{\varepsilon}_{\bm{\theta}}(\xt,t)\right)+\sigmatbar\bm{\varepsilon}.
+\end{equation}
+By combining \cref{eq:11.10} and \cref{eq:11.11}, we get the generating process for all mainstream diffusion models, in which DDPM has chosen $\sigmatbar=0$ and $\sigmat=\betatmbar\betat/\betatbar$, DDIM has chosen $\sigmatbar=0$, $\sigmat=0$, whereas in Analytic-DP<. the value of $\sigmatbar$ had been further optimised.
+
+\subsection{Cold diffusion}
+We now move on to show that the idea of \emph{cold diffusion}, introduced in the paper entitled ``\emph{Cold Diffusion: Inverting Arbitrary Image Transforms without Noise}''\cite{bansal2023cold}, is also a special case of the UDM. Cold diffusion also focuses on modelling continuous data, and it can be seen from the paper title that, this method aims at building a forward process with any arbitrary noiseless transformations. According to our best knowledge, this is the first work that tries to build a generic forward process, which has inspired us in formulating the UDM.
+
+Cold diffusion builds the forward process with a definitive transformation $\x_t=\mathcal{F}(\x_0)$. To facilitate the subsequent discussions, let us generalise this forward process further by introducing the noise term as 
+\begin{equation}
+    \label{eq:11.12}
+    \x_t=\mathcal{F}(\x_0)+\sigma\bm{\varepsilon},\qquad \bm{\varepsilon}\sim q(\bm{\varepsilon}).
+\end{equation}
+Here, $\mathcal{F}$ represents any arbitrary way to destruct the raw data. For images, this could be either blurring, painting, snowification, and so on. For a definitive transformation, we only need to let $\sigma\to0$. Subsequently, we choose $q(\x_0|\xt)$ as a normal distribution with $\ell_1$-norm:
+\begin{equation}
+    \label{eq:11.13}
+    q(\x_0|\xt)=\frac{1}{\mathcal{Z}(\tau)}\int e^{-\|\x_0-\mathcal{G}_t(\xt)\|_1/\tau} d\x_0,
+\end{equation}
+in which $\mathcal{Z}(\tau)$ is the normalisation constant. If we choose $\tau$ to be a fixed constant, then ignore the constant term, we have $-\log q(\x_0|\xt)\propto \|\x_0-\mathcal{G}_t(\xt) \|_1$. Combining this with $\xt=\mathcal{F}(\x_0)$, we have the following training target, which is to minimise
+\begin{equation}
+    \label{eq:11.14}
+    \|\x_0-\mathcal{G}_t(\mathcal{F}_t(\x_0))\|_1.
+\end{equation}
+
+For the reverse process, the variance in $q(\x_0|\xt)$ is completely ignored, \emph{i.e.} we let $\tau\to0$. As such, we have $\hat{\x}_0=\mathcal{G}_t(\xt)$. If we further choose $p(\xtm|\xt,\x_0)=p(\xtm|\x_0)$, \emph{i.e}, $\xtm=\mathcal{F}_{t-1}(\x_0)+\sigma\bm{\varepsilon}$, then we substitute in $\hat{\x}_0$ and take the limit of $\sigma\to 0$, we reached
+\begin{equation}
+    \label{eq:11.15}
+    \hat{\x}_0=\mathcal{G}_t (\xt),\qquad \xtm=\mathcal{F}_{t-1}(\hat{\x}_0).
+\end{equation}
+This result corresponds to the \textbf{na\"{i}ve sampling} proposed in the paper. On the other hand, if we started from $\x_t=\mathcal{F}(\x_0)+\sigma\bm{\varepsilon}$ and solved $\bm{\varepsilon}=(\x_t-\mathcal{F}(\x_0))/\sigma$, before we substitute this into $\xtm=\mathcal{F}_{t-1}(\x_0)+\sigma\bm{\varepsilon}$, we arrived at the result of \textbf{improved sampling}:
+\begin{equation}
+    \label{eq:11.16}
+    \hat{\x}_0=\mathcal{G}_t (\xt),\qquad \xtm=\xt+\mathcal{F}_{t-1}(\hat{\x}_0)-\mathcal{F}_t(\hat{\x}_0).
+\end{equation}
+
+Overall, cold diffusion was successful in realising a generic forward diffusion process. However, it over emphasised the ideal of ``without noise'', which has led to shortages that are almost impossible to overcome theoretically. For example, when using a blurring operation in the forward process, it blurs an $(w\times w\times 3)$ dimensional image data into a 3-dimensional vector with a definitive transformation. As the same time, another definitive  reverse process is  also applied to rebuild the $3w^2$-dimensional image from a 3-dimensional vector. It is unavoidable that a lot of informations would have been lost in this process, which limited the resolutions of the reconstructed images. To solve this problem, we cannot eliminate the noise term in the diffusion process. This is because noises represent uncertainties, which promote a ``many-to-one'' mapping in the forward process. In another word, it allows information loss. As a matter of fact, this problem has been made aware of in the implementation of the cold diffusion, in which a $3w^3$-dimensional random noise had been injected into the 3-dimensional vector. Numerical experiments showed that this has indeed let to improved image qualities.
+
+\subsection{The editing model}
+The two examples given above are both dealing with continuous data. However, we have mentioned that the purpose of UDM is to not restricting the data type. Therefore, in this subsection, we will discuss an example with discrete data. We aim to show that the text generation model for editing can also be viewed as a special case of UDM.
+
+For simplicity, we consider a sentence with a fixed length $\ell$. It is possible also to deal with variable length but it is slightly more difficult. With this, we define the forward process $\xt=\mathcal{F}(\x_0,\bm{\varepsilon})$ as 'random substitution', \emph{i.e.}, we randomly select $t$ tokens in the sentence and substitute them with other tokens. When $t=\ell$, $\xt$ is a combination of $\ell$ random tokens. In this case, $q(\x_0|xt)$ is a model that predicts the original token sequence from a sequence of fully randomised tokens, which can be trained with regressive models and cross-entropy as the loss function. Note that now the forward process  $\mathcal{F}(\x_0,\bm{\varepsilon})$  is certainly not invertible, as there are multiple pathways to evolve $\x_0$ to $\xt$. As such, we can only apply $p(\xtm|\xt,\x_0)=p(\xtm|\x_0)$, which leads to the following generative process:
+\begin{myquote}
+    \begin{enumerate}
+        \item Randomly choose $\ell$ tokens as the initial $\x_\ell$.
+        \item Make an estimate of $\hat{\x}_0$ from $q(\x_0|\xt)$.
+        \item Randomly choose $\ell-1$ tokens to substitute other tokens to form $\xtm$.
+        \item Repeat steps 2 and 3 until a final $\x_0$ is obtained.
+    \end{enumerate}
+\end{myquote}
+
+However, this algorithm will not lead to very good outcomes. This is because the estimate from step 2 may be significantly destroyed by the noises from step 3. In order to improve the sampling quality, we need to use a better sampling procedure, this requires $\mathcal{F}(\x_0,\bm{\varepsilon})$ to be an invertible function of $\bm{\varepsilon}$. This means that from a give pair of $\x_0$ and $\xt$, we can figure out how the forward transformation was achieved. To achieve this, we redefined the forward process as ``\emph{randomly selecting t tokens in the sentence and substitute them with different ones}''. The main difference is now we forces the new tokens must substitute with ones that are different from the original ones. Otherwise, one might have sampled the same tokens as before. With this restriction, we could directly compare $\x_0$ and $\xt$ to figure out what the transformation was. In this case, we change step 3 into a transformation from $\hat{\x}_0$ to $\xt$:
+\begin{myquote}
+    \begin{enumerate}
+        \item Randomly choose $\ell$ tokens as the initial $\x_\ell$.
+        \item Make an estimate of $\hat{\x}_0$ from $q(\x_0|\xt)$, under the condition that $t$ tokens in $\hat{\x}_0$ must be different from $\xt$, which may be easily achievable with a non-autoregressive model.
+        \item Randomly choose a token in $\xt$ that is different from $\hat{\x}_0$, substitute it with the token of $\hat{\x}_0$ in the corresponding positions to form $\xtm$.
+        \item Repeat steps 2 and 3 until a final $\x_0$ is obtained.
+    \end{enumerate}
+\end{myquote}
+
+With this sampling procedure, in every sampling step, the part in $\hat{\x}_0$ that is identical to $\xt$ can be kept. Comparing $\xtm$ and $\xt$, only one token would have been changed, so we have a much more stable progressive generative process. 
+
+\subsection{The masking model}
+Here, we provide  another example to further help the readers in understanding the models. Similar to above, we consider a sentence with $\ell$ tokens, and define the forward process $\xt=\mathcal{F}(\x_0,\bm{\varepsilon})$ as random masking, \emph{i.e.}, we select $t$ tokens and randomly replace them with [MASK], in which $t\leq \ell$. When $t=\ell$, $\xt$ is a sentence with $\ell$ [MASK].
+
+In this case, $q(\x_0|\xt)$ is a model that predicts the original sequence from a sequence that contains [MASK]. This can be achieved with non-autoregressive models such as BERT based on MLM, with cross-entropy as the loss function. The basic generative process is:
+\begin{myquote}
+    \begin{enumerate}
+        \item Using a sequence containing $\ell$ [MASK] as the starting $\x_\ell$.
+        \item Sample $\hat{\x}_0$ from $q(\x_0|\xt)$.
+        \item Randomly selecting $t-1$ tokens in $\hat{\x}_0$ and replace it with [MASK], this gives $\xtm$.
+        \item Repeat steps 2 and 3 until a final $\x_0$ is obtained.
+    \end{enumerate}
+\end{myquote}
+
+Noticing that $\mathcal{F}_{t}(\x_0,\bm{\varepsilon})$ is an invertible function of $\bm{\varepsilon}$, meaning that we can figure our how the sequence has been transformed from $\x_0$ to $\xt$, \emph{i.e.} which tokens have been changed into [MASK]. In this case, we have the following improved sampling procedure:
+\begin{myquote}
+    \begin{enumerate}
+        \item Using a sequence containing $\ell$ [MASK] as the starting $\x_\ell$.
+        \item Sample $\hat{\x}_0$ from $q(\x_0|\xt)$, where we only need to sample for the tokens that were originally the [MASK], and do not change those that were not [MASK].
+        \item Select $t-1$ positions randomly from $\xt$ in which the $t$ positions were occupied by [MASK]. Changing those into the corresponding token at $\hat{\x}_0$ and make this to be $\xtm$.
+        \item Repeat steps 2 and 3 until a final $\x_0$ is obtained.
+    \end{enumerate}
+\end{myquote}
+In which step 2 and 3 can be combined into a single step:
+\begin{myquote}
+    Randomly selecting a position from $t$ possible positions that are occupied by [MASK] in $\xt$, and according to the probability $q(\x_0|\xt)$, sample a token and replace the [MASK] at that position, giving a new $\xtm$.
+\end{myquote}
+This is basically the same as the Gibbs sampling in MLM model. From these two examples, we could appreciate that many models based on progressive changes can all be described by the UDM, or equivalently, using USM to guide the design of new models based on progressive changes.
+
+
+\subsection{The encoding model}
+In all the models described above, there exists no trainable parameters in the forward process, meaning these forward processes are pre-designed. This is not completely necessary, which we can generalise the forward diffusion in DDPM into 
+\begin{equation}
+    \label{eq:11.17}
+    \xt=\alphatbar \mathcal{F}(\x_0)+\betatbar\bm{\varepsilon},\quad \bm{\varepsilon}\sim \normdist,
+\end{equation}
+in which $\mathcal{F}(\x_0)$ is the encoding model for $\x_0$, which can contain trainable parameter. The corresponding training target is 
+\begin{equation}
+    \label{eq:11.18}
+    -\log q(\x_0|\xt)=-\log q\left(\x_0| \alphatbar \mathcal{F}(\x_0)+\betatbar\bm{\varepsilon}\right).
+\end{equation}
+The only difference is that now $\mathcal{F}$ is also parameterised. The reverse sampling process is also similar, except now the last step $\hat{\x}_0\sim q(\x_0|\x_1)$ will return $\hat{\x}_0$ directly. Most importantly, because now we have an encoding model $\mathcal{F}(\x_0)$, the input data $\x_0$ could be either continuous or discrete, which is similar to VAE that transforms the data distribution into the normal distribution of the latent variables.
