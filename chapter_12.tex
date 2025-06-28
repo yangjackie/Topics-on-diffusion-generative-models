@@ -1,0 +1,148 @@
+\section{Conquering the Diffusion ODE}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9280}}}
+
+In \cref{sect_5:SDE}, we aimed at developing an understanding of the diffusion model from the perspective of SDE. Subsequently, in \cref{sect:6}, we showed that, in the diffusion model that was established based on SDE, there exists an underlying ODE model. Coincidentally, in \cref{sect_4:DDIM} where we discussed DDIM, we have demonstrated that the original DDPM model which performs stochastic samples, also implicitly contains a DDIM model, in which the sampling procedure is deterministic, and its continuous limit also corresponds to an ODE. 
+
+Thinking of the above arguments in detail, it is not difficult to discover that both DDPM$\to$DDIM and SDE$\to$ODE are procedures that convert a stochastic sampling model into a deterministic one. On the other hand, if our initial goal was directly based on ODE, then these procedures of establishing a deterministic sampling framework from a stochastic starting point are obviously too cumbersome. In this section, we will try to provide a direct derivation for the diffusion model based on ODE, and demonstrate its linkages with the Jacobian and the diffusion equations for heat conduction. 
+
+\subsection{Differential equation}
+
+The core idea behind the generative models, such as GAN, is to find a deterministic transformation that is capable of transforming a random variable sampled from a simple probabilistic distribution, such as the standard normal distribution, into a realistic sample that follows a more data-specific distribution. The flow mode is another type of generative model, which follows the opposite design concept. It tries to find a deterministic transformation that transforms the unknown data distribution into a simple one, then it solves for the corresponding inverse transformation to establish the generative model. 
+
+The traditional flow model achieves this invertible transformation through a careful design of the coupling layers. However, it was later realised that the same type of transformation can be achieved with the usage of differential equations, and it is theoretically more elegant. This leads to the new field of neural ODE which builds generative models by combining neural network with differential equations. 
+
+Consider the first-order ordinary differential equation on $\xt\in\mathbb{R}^d$:
+\begin{equation}
+    \label{eq:12.1}
+    \frac{d\xt}{dt}=f_{t}(\xt).
+\end{equation}
+Suppose $t\in[0,T]$, then with a given $\x_0$, (under some conditions that are easy to realise) we could solve for $\x_T$ deterministically. It implies that this ODE describes a definitive transformation from $\x_0$ to $\x_T$. More specifically, this transformation will be invertible, meaning that we could also solve the ODE in the reverse order to obtain the transformation from $\x_T$ to $\x_0$. Therefore, differential equations lead to an elegant theoretical solution for constructing an invertible transformation.
+
+\subsection{The Jacobian}
+
+Similar to the diffusion models discussed before, we treat $\x_0$ as a sample from the input data, and $\x_T$ as a sample drawn from a simple probability distribution. Our goal here is to obtain a transformation from $\x_0$ to $\x_T$ through the differential equation. 
+
+To do this, we first write out the finite-difference form for the differential equation [\cref{eq:12.1}] as:
+\begin{equation}
+\label{eq:12.2}
+\x_{t+\Delta t}-\x_t=f_t(\xt)\Delta t.
+\end{equation}
+Since this is a definitive transformation, we have the following expression for the probability distributions at $\xt$ and $\x_{t+\Delta t}$:
+\begin{equation}
+    \label{eq:12.3}
+    p_t(\xt)d\x_t=p_{t+\Delta t}(\x_{t+\Delta t})d\x_{t+\Delta t}=p_{t+\Delta t}(\x_{t+\Delta t}) \left\vert \frac{\partial \x_{t+\Delta t}}{\partial \xt} \right\vert d\x_t.
+\end{equation}
+Here, $\frac{\partial \x_{t+\Delta t}}{\partial \xt}$ is the Jacobian matrix for the transformation and $\vert\cdot\vert$ takes its determinant. By taking the derivatives on both sides of \cref{eq:12.2}, we have
+\begin{equation}
+    \label{eq:12.4}
+    \frac{\partial \x_{t+\Delta t}}{\partial \xt}=\bm{I}+\frac{\partial f_t(\xt)}{\partial \xt}\Delta t,
+\end{equation}
+and based on the definition on the derivative of a determinant, we have
+\begin{equation}
+    \label{eq:12.5}
+    \left\vert \frac{\partial \x_{t+\Delta t}}{\partial \xt} \right\vert\approx 1+\mbox{Tr}\left[ \frac{\partial f_t(\xt)}{\partial \xt}\right]\Delta t=1+\nabla_{\xt}\cdot f_t(\xt)\Delta t\approx \exp\left[ \nabla_{\xt}\cdot f_t(\xt)\Delta t\right].
+\end{equation}
+By taking the logarithm to both sides of \cref{eq:12.3} with the use of \cref{eq:12.5}, we obtain the following equation for the change in the probability distributions in the finite-difference form:
+\begin{equation}
+    \label{eq:12.6}
+\log p_{t+\Delta t}(\x_{t+\Delta t}) -\log p_t(\xt) \approx - \nabla_{\xt} \cdot f_t(\xt)\Delta t.
+\end{equation}
+
+\subsection{Taylor approximation}
+Now suppose $p_t(\xt)$ defines a series of probability density functions that vary continuously with respect to the time variable $t$, in which $p_0(\x_0)$ is the true sample distribution and $p_{T}(\x_T)$ is a simple distribution. When both $\Delta t$ and $\x_{t+\Delta t}-\xt$ are sufficiently small, we can write the following first-order Taylor approximation for \cref{eq:12.6}:
+\begin{equation}
+\label{eq:12.7}
+\log p_{t+\Delta t}(\x_{t+\Delta t}) -\log p_t(\xt) \approx(\x_{t+\Delta t}-\xt)\nabla_{\xt}\cdot\log p_t (\xt) +\Delta t\frac{\partial}{\partial t}\log p_t (\xt).
+\end{equation}
+Substituting the expression for $\x_{t+\Delta t}-\xt$ from \cref{eq:12.2} and compare the result to \cref{eq:12.6}, we get the equation which $f_t(\xt)$ must satisfy:
+\begin{equation}
+    \label{eq:12.8}
+    -\nabla_{\xt}\cdot f_t(\xt)=f_t(\xt) \nabla_{\xt}\cdot\log p_t (\xt) +\Delta t\frac{\partial}{\partial t}\log p_t (\xt).
+\end{equation}
+In other words, any arbitrary function $f_t(\xt)$ that satisfies the above equation will be a suitable candidate for constructing the ODE of the form shown in \cref{eq:12.1}, solving which will allow us to achieve the transformation between the data and a simple probability distribution. Rearranging \cref{eq:12.8}, we get the following
+\begin{equation}
+    \label{eq:12.9}
+    \frac{\partial}{\partial t}\log p_t(\xt)=-\nabla_{\xt} \left( f_t(\xt)p_t(\xt)  \right),
+\end{equation}
+which is actually the special case of the Fokker-Planck equation introduced in \cref{sect:6} when $g_t=0$.
+
+\subsection{The equation of heat conduction}
+
+Now consider a solution to \cref{eq:12.9} that is of the following form:
+\begin{equation}
+    \label{eq:12.10}
+    f_t(\xt)=-D_t(\xt)\nabla_{\xt}\log p_t (\xt),
+\end{equation}
+in which $D_t(\xt)$ could be either a matrix or a scalar, depending on the complexity of the problem. Why should we consider this particular form of the solution? The author's initial intention was to match with the results from DDIM. It was later found that, after some generalisation, it can be matched with the diffusion model to be discussed below. In retrospect, if $D_t(\xt)$ is a non-negative scalar function and if we substitute \cref{eq:12.10} into \cref{eq:12.2}, we found that it led to a form that is similar to the case of gradient descent, in which the transformation from $\x_0$ to $\x_T$ is a process that progressively searches the regions of low probabilities, and conversely, the transformation from $\x_T$ to $\x_0$ gradually leads to the searches over the regions of high probabilities. This follows our basic intuitions, which may be considered as the inspiration behind \cref{eq:12.10}.
+
+Now by substituting \cref{eq:12.10} into \cref{eq:12.9}, we get 
+\begin{equation}
+    \label{eq:12.11}
+    \frac{\partial}{\partial t}p_t (\xt)=\nabla_{\xt} \cdot \Bigl( D_t(\xt)\nabla_{\xt} p_t(\xt) \Bigr).
+\end{equation}
+This is the diffusion equation in differential equations. Here, we will only consider the most simplified case, in which $D_{t}(\xt)$ is a scalar function that is independent on $\xt$, such that the diffusion equation simplifies into 
+\begin{equation}
+    \label{eq:12.12}
+    \frac{\partial}{\partial t}p_t (\xt)=D_t  \nabla_{\xt}^2 p_t(\xt).
+\end{equation}
+This gives the equation for heat conduction, which forms the basis for our subsequent discussions.
+
+\subsection{Solving for the probability distribution}
+
+Using the Fourier transformation, we can convert the equation for heat conduction into an ODE, from which we can solve for $p_t(\xt)$, and the result is 
+\begin{equation}
+    \label{eq:12.13}
+    p_t(\xt)=\bigintssss \frac{1}{(2\pi\sigma_t^2)^{\frac{d}{2}}}\exp\left(-\frac{||\xt-\x_0||^2_2}{2\sigmat^2}\right)p_0(\x_0)d\x_0=\int \mathcal{N}(\xt;\x_0,\sigma_t^2\bm{I})p_0(\x_0)d\x_0,
+\end{equation}
+in which $\sigmat^2=2\int_0^t D_sds$ or $D_t=\dot{\sigmat}\sigmat$ (with $\sigma_0=0$). From which we see that the solution is a Gaussian mixture model with $p_0 (\x_0)$ as the initial distribution.
+
+\begin{myquote}
+\textbf{The Procedure for solving \cref{eq:12.12}} Here, we shall briefly introduce the procedure for solving the equation of heat conduction, which can be skipped by the readers who are no interested or who are familiar with the equation. 
+
+It is not difficult to solve \cref{eq:12.12} with the use of Fourier transformation. Taking the Fourier transformation to the variable $\xt$ on both sides of the equation and use the fact that $\nabla_{\xt}\to i\omega$, the result is:
+\begin{equation}
+    \label{eq:12.14}
+    \frac{\partial}{\partial t}\mathcal{F}_t(\omega)=-D_t\omega^2\mathcal{F}_t(\omega).
+\end{equation}
+This is an ordinary differential equation with the following solution:
+\begin{equation}
+    \label{eq:12.15}
+    \mathcal{F}_t(\omega)=\mathcal{F}_0(\omega)\exp\left(-\frac{\sigmat^2\omega^2}{2} \right),
+\end{equation}
+in which $\sigmat^2=2\int_0^t D_s ds$, and $\mathcal{F}_{0}(\omega)$ is the Fourier transformation of $p_0(\x_0)$. Now we take the inverse Fourier transformation on both size, for which $\mathcal{F}_t(\omega)$ transforms back to $p_t(\xt)$, $\mathcal{F}_0 (\omega)$ transforms back to $p_0(\x_0)$ and $\exp(-\sigmat^2\omega^2/2)$ corresponds to the normal distribution $\mathcal{N}(\xt;\x_0,\sigmat^2\bm{I})$. The final form of the solution given in \cref{eq:1.13} can be obtained by following the convolution property of the Fourier transformation.
+\end{myquote}
+
+\subsection{Completing the model design}
+
+Let us briefly summarise the results so far. From solving the equation for heat conduction, we have obtained
+\begin{equation}
+    \label{eq:12.16}
+    p_t(\xt)=\int \mathcal{N}(\xt;\x_0,\sigma_t^2\bm{I})p_0(\x_0)d\x_0,
+\end{equation}
+which corresponds to the solution for the following equation
+\begin{equation}
+    \label{eq:12.17}
+    \frac{d\xt}{dt}=-\dot{\sigmat}\sigmat \nabla_{\xt}\log p_{t}(\xt).
+\end{equation}
+This gives a definitive transformation from $p_0(\x_0)$ to $p_T (\x_T)$. If $p_T (\x_T)$ is a distribution that is easy to sample from, and we know how to compute the score function $\nabla_{\xt}\log p_{t}(\xt)$, then we can perform a random sampling from $\x_T\sim p_T (\x_T)$, followed by solving the differential equation in the reverse order, to synthesise new sample $\x_0\sim p_0(\x_0)$.
+
+The first equation is, when is $p_T (\x_T)$ a distribution that is easy to sample from? Based on \cref{eq:12.16}, we know that 
+\begin{equation}
+    \label{eq:12.18}
+    \x_T\sim p_T(\x_T)\quad\Leftrightarrow\quad \x_T=\x_0+\sigma_T\varepsilon,\quad \x_0\sim p_0(\x_0),\quad \varepsilon\sim\mathcal{N}(0,\bm{I}).
+\end{equation}
+When $\sigma_T$ is sufficiently large, the influence of $\x_0$ upon $\x_T$ will be negligible, at which point we can simply take
+\begin{equation}
+    \label{eq:12.19}
+    \x_T\sim p_T(\x_T)\quad\Leftrightarrow\quad \x_T=\sigma_T\varepsilon\quad \varepsilon\sim\mathcal{N}(0,\bm{I}),
+\end{equation}
+which makes $p_T(\x_T)$ a distribution that is easy to sample from. As such, the choice of $\sigmat$ should follow the general rule of $\sigma=0$, $\sigma_T \gg 1$, with $\sigmat$ being a continuous growing function over $[0,T]$.
+
+The second question is, how should we compute $\nabla_{\xt}\log p_t(\xt)$? This is the same as the score-matching that was discussed in \cref{sect_5:SDE}, in which we use a neural network $s_{\theta}(\xt,t)$ to surrogate it, with the following training target:
+\begin{equation}
+    \label{eq:12.20}
+    \mathbb{E}_{\x_0,\xt\sim\mathcal{N}(\xt;\x_0,\sigma^2\bm{I})p_{0}(x_0)}\left[ \left\|  s_{\theta}(\xt,t) - \nabla_{\xt}\log \mathcal{N}(\xt;\x_0,\sigma^2\bm{I}) \right\|_2^2 \right].
+\end{equation}
+This is called the conditional score matching, which has been derived before and will not be repeated here.
+
+In summary, we have provided a different approach to derive the ODE-based diffusion model. Starting from the ODE, by combining the Jacobian we obtained the first-order approximation to the probability distribution. By comparing this approximation to that obtained directly from the first-order Taylor expansion, we obtained the equation that the $f_t(\xt)$ term should satisfy. Subsequently, this equation can be transformed into the equation of diffusion or heat conduction, that is to be solved. Compared to the previous derivation from the SDE and FP equations, the procedure presented here should be much more straight forward.
