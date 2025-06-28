@@ -50,7 +50,7 @@ Note that the last $\frac{\partial}{\partial t}$-term cannot be ignored, this is
     &\propto\exp\left(-\frac{\| \x_{t+\Delta t}-\xt-[f_t(\xt)-g_t^2 \nabla_{\xt} \log p(\xt)]\Delta t\|_2^2}{2g_t^2\Delta t} -\frac{1}{2}\nabla_{\xt}\log p(\xt)\Delta t+\frac{\partial}{\partial t}\log p(\xt)\Delta t  \right)\nonumber\\
     &\propto \exp\left(-\frac{\| \x_{t+\Delta t}-\xt-[f_t(\xt)-g_t^2 \nabla_{\xt} \log p(\xt)]\Delta t\|_2^2}{2g_t^2\Delta t}+\mathcal{O}(\Delta t)\right). \label{eq:5.6}
 \end{align}
-When $\Delta t\to 0$, $mathcal{O}(\Delta t)$ plays a negligible role, in this case,
+When $\Delta t\to 0$, $\mathcal{O}(\Delta t)$ plays a negligible role, in this case,
 \begin{align}
     p(\xt|\x_{t+\Delta t}) &\approx  \exp\left(-\frac{\| \x_{t+\Delta t}-\xt-[f_t(\xt)-g_t^2 \nabla_{\xt} \log p(\xt)]\Delta t\|_2^2}{2g_t^2\Delta t}\right) \nonumber\\
     &\approx \exp\left(-\frac{\|\xt- \x_{t+\Delta t}-[f_{t+\Delta t}(\x_{t+\Delta t})-g_{t+\Delta t}^2 \nabla_{\x_{t+\Delta t}} \log p(\x_{t+\Delta t})]\Delta t\|_2^2}{2g_{t+\Delta t}^2\Delta t}\right).\label{eq:5.7}
