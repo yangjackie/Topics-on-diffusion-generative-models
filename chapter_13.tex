@@ -1,0 +1,105 @@
+\section{From the Law of Gravitational Force to Diffusion Model}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9305}}}
+
+For many readers, the diffusion generative model is probably the first deep-learning model that they have encountered, which has utilised so many different mathematical methods. In this series of articles, we have demonstrated the strong connection between the diffusion models and many different fields in mathematics, including mathematical analysis, probability theory, statistics, ordinary and stochastic partial differential equations. It is reasonable to say, even for researchers in the field of pure theory, such as mathematical physics, it will be very likely for them to find their skills useful in the development of diffusion generative models. 
+
+In this section, we shall introduce another diffusion model that has a strong link with mathematical physics, that is the ODE-based diffusion model that was inspired by the law of the gravitational force. It cam from the paper entitled ``\textbf{Poisson Flow Generative Model}''\cite{xu2022poisson} (PFGM for short), which has provided a new perspective for constructing an ODE-based diffusion model.
+
+\subsection{The gravitational force}
+
+We have all learned about the law of gravitational force in high school. Basically, it states that, the attractive force between two point masses, is proportional to the product of their masses and the inverse square of the distance between them. Here, we ignore the masses and the constant of the gravitational field, but focus on the relationship between the gravitational force with distance and direction. Assuming the source of this attractive force is at $\bm{y}$, then the force experienced by an object at $\bm{x}$ is given by:
+\begin{equation}
+    \label{eq:13.1}
+    \bm{F}(\bm{x})=-\frac{1}{4\pi}\frac{\bm{x}-\bm{y}}{\|\bm{x}-\bm{y}\|_2^3}.
+\end{equation}
+We can further ignore the factor of $1/4\pi$ for the time being, as it will not affect our subsequent discussions. Strictly speaking, the above equation describes the gravitational field in the three-dimensional space. For the $d$-dimensional case, the corresponding gravitational field is 
+\begin{equation}
+    \label{eq:13.2}
+    \bm{F}(\bm{x})=-\frac{1}{S_d (1)}\frac{\bm{x}-\bm{y}}{\|\bm{x}-\bm{y}\|_2^d},
+\end{equation}
+in which $S_d(1)$ is the surface area of a $d$-dimensional hypersphere. This expression corresponds to the gradient of the Green's function for the $d$-dimensional Poisson distribution, thus the word ``Poisson'' in the title of the paper mentioned above. 
+
+\subsection{Following the lines of the gravitational field}
+
+If there exist multiple sources of attractions, we just need to add up the attractive forces from different sources, based on the additivity of the forces. Generally, we observe that, for most of the field lines, they start from infinitely far away, and end at the attractors. Now, an intuitive but smart idea arises. If every source of the gravitational force represents a real sample to be generated, then for an arbitrary far away point, it will evolve into a real sample if it moves by following the field line. This is the key genius thought behind the article ``Poisson Flow generative Model''.
+
+\subsection{Equivalent centre-of-mass}
+
+Nevertheless, to convert a smart idea into a workable model, there are still many details that will need to be filled in. For instance, when we say ``an arbitrarily far away point'', which corresponds to the prior distribution in the diffusion model, how far is really far enough, and how should we sample an arbitrary point? Apparently, if the sampling procedure is too complicated, then it becomes valueless. 
+
+Fortunately, there exists an equivalence property for the gravitational field: \emph{The gravitational field experienced by a point that is infinitive far away from multiple sources of attraction, is equivalent to the field generated from a single centre-of-mass with the sum of all masses.}
+
+This is saying that, when the distance is sufficiently large, we can treat the field as originating from a single point source of attraction. What is the property of the gravitational field from a single point mass? It is isotropic in space! This means that when the radius is sufficiently large, we can consider the gravitational field lines will pass the surface of the sphere centred at the point mass evenly. Therefore, for the procedure of initial sampling, it should be performed on the surface of a hypersphere with a sufficiently large radius, and we shall discuss later how large is sufficiently large.
+
+\subsection{Mode Collapsing}
+
+Has this completed the generative model? Not yet! The isotropic nature of the gravitational field has made the initial sampling easy. However, it can also cause the gravity sources cancelling each other, leading to the so-called phenomenon of ``mode-collapsing''. More specifically, we consider the field distribution around a spherical shell, in which it can be observed that, outside the shell, the gravitational field distributes isotropically. However, inside the shell, the field is empty! It shows that the fields cancel each other, which essentially forms a vacuum inside the shell.
+
+the cancellation of the field implies that, because the gravitational forces form uniformly distributed sources on a spherical shell cancel out each other, it is equivalent to the case where these sources did not exist in the first place. On the other hand, the core idea of the generative model discussed here, is to let a point far away to move along the gravitational field until it reaches a particular source. If, the gravitational field cancels each other, it means that we may never reach certain sources of the gravitational field, or equivalently, we may never be able to synthesise some of the realistic samples. In this case, we lost the diversity in the generative outcomes. This is the phenomenon of mode collapse.
+
+\subsection{Adding one extra dimension}
+
+It seems like the problem of mode collapsing is unavoidable anyhow. This is because, when we are building the generative model, we usually assume that the real samples follow a continuous distribution. In this case, we can always choose a sphere, even though the samples do not distribute uniformly on its surface, we can always find a subset from this distribution that is uniformly distributed, such that the forces from this subset cancel out each other. This is equivalent to saying this subset of samples being non-existent, leading to the problem of mode collapse. 
+
+Does this mean we are stuck? No, as this brings to the second genius idea behind PFGM, that is, to add an one extra dimension.
+
+From our previous analysis, the problem of mode collapse become unavoidable, is because the continuous sample distribution which we assumed in the first place has led to the situation in which the isotropy in the field distribution becomes unavoidable. In order to avoid the mode collapse, we need to try avoiding isotropy in the sample distribution. However, the sample distribution is our target distribution, which we cannot change. Nevertheless, we can add one extra dimension to the samples. If now we tackle the problem in the $(d+1)$-dimensional space, we can no longer have isotropy on a place. Using a low dimensional analogous example, we know that a circle in the two-dimensional space is isotropic. However, in the three-dimensional space, only a sphere is isotropic, a circle that is isotropic in the two-dimensional space is no longer isotropic in the three-dimensional space.
+
+In this regard, let us assume that the real samples that we would like to generate are  $\x\in\mathbb{R}^d$, and we can introduce another new dimension $t$, such that the sample data now change into the form of $(\x,t)\in\mathbb{R}^{d+1}$ Correspondingly, the original sample follows a distribution of $\x\sim \tilde{p}(\x)$. Now the distribution becomes $(\x,t)\sim\tilde{p}(\x)\delta(t)$, in which $\delta (t)$ is the Dirac distribution. This is a transformation that places the real sample onto the $t=0$ plane in the $(d+1)$-dimensional space. With this, in the $(d+1)$-dimensional space, all the realistic samples will always have $t=0$, which cannot be isotropically distributed any more.
+
+\subsection{Everything clicked}
+
+From the first loo of it, adding one extra dimension is only a small mathematical trick. However, as one thinks more about it, we could find more brilliant points behind this approach. Many problems that are difficult to be solved in the $d$-dimensional space have suddenly become easy when we moved to the $(d+1)$-dimension.
+
+According to \cref{eq:13.2} and the linear superposition of the gravitational fields, the corresponding field in the $(d+1)$-dimensional space is
+\begin{align}
+    \bm{F}(\x,t)&=-\frac{1}{S_{d+1}(1)}\iint\frac{(\x-\x_0,t-t_0)}{(\|\x-\x_0\|^2+(t-t_0)^2)^{(d+1)/2}}\delta (t_0)\tilde{p}(\x_0)d\x_0 dt_0 \nonumber\\
+    &=-\frac{1}{S_{d+1}(1)}\iint\frac{(\x-\x_0,t)}{(\|\x-\x_0\|^2+t^2)^{(d+1)/2}}\delta (t_0)\tilde{p}(\x_0)d\x_0 \label{eq:13.3}\\
+    &\overset{\Delta}{=} (\bm{F}_{\x},\bm{F}_t),\nonumber
+\end{align}
+in which $\bm{F}_{\x}$ is the first $d$ components of $\bm{F}(\x,t)$ and $\bm{F}_t$ is its $(d+1)$-th component. We will discuss later on how to learn $\bm{F}(\x,t)$. Assuming that we have already know the form of $\bm{F}(\x,t)$, then we need to move along the field line, meaning that the trajectories of our sample movement should always follow the direction of $\bm{F}(\x,t)$, \textit{i.e.},
+\begin{equation}
+    \label{eq:13.4}
+    (d\x, dt)=(\bm{F}_{\x},\bm{F}_t )d\tau \quad \Rightarrow\quad \frac{d\x}{dt}=\frac{\bm{F}_{\x}}{\bm{F}_t}.
+\end{equation}
+This is the differential equation that we will need for the generative model. Before, in the $d$-dimensional space, apart from the problem of mode collapse, when to stop the movement is also a problem. Intuitively, we just need to follow the field line and stop when we have collided with the sample. But how do we judge whether we have collided with a real sample? This is not a trivial question to answer. However, in the $(d+1)$-dimensional space,all the real samples lie on the plane of $t=0$, hence we should stop when $t=0$ is reached.
+
+As for the prior distribution, based on the discussions above, it should be a uniform distribution on a $(d+1)$-dimensional hypersphere with a sufficiently large radius. However, since we use $t=0$ as our stop signal, then we could fix a sufficiently large $\tau$, in the order of 40 to 100, and then sample on the $t=T$ plane. In this case, the generative process becomes solving the equation of motion from $t=T$ to $t=0$ as given by the differential equation. This gives well-defined starting and end points for the generative process.
+
+If we perform sampling on the $t=T$ place, it will not be uniform. In fact, we have the following:
+\begin{equation}
+    p_{prior}(\x)\propto\frac{1}{(\|\x\|^2+T^2)^{(d+1)/2}}.
+\end{equation}
+It can be seen that the probability density is only dependent on the modulus $\|\x\|$. Hence, for sampling, we need to first sample the modulus from a given distribution, then we perform uniform sampling for different directions and combine the two together. For sampling the modulus, let $r=\|\x\|$ and converts to hyperspherical harmonics, then we have $p_{prior}(r)\propto r^{d-1}(r^2+\tau^2)^{(d+1)/2}$, from which we could sample from this distribution with the inverse cumulative distribution function.
+
+\subsection{Training the field}
+
+Now, we have the prior distribution and the differential equation, all we have left is to develop a protocol to train the function of a vector field $F(\x,t)$. Based on the differential equation (\ref{eq:13.4}), it can be seen that the movement of the particle is only dependent on the relative value of the vector field. As such, the results will not be affected if we shrink or expand the vector field. Based on \cref{eq:13.3}, we can write the vector field as an expectation value:
+\begin{equation}
+    \label{eq:13.8}
+    \bm{F}(\x,t)=\mathbb{E}_{\x_0\sim\tilde{p}(\x_{0})}\left[ -\frac{(\x-\x_0,t)}{(\|\x-\x_0\|^2+t^2)^{(d+1)/2}}\right].
+\end{equation}
+Using the following equality that we had applied many times:
+\begin{equation}
+    \label{eq:13.9}
+    \mathbb{E}_{\x}=\argmin_{\bm{\mu}}\mathbb{E}_{\x}[\|\x-\bm{\mu}\|^2],
+\end{equation}
+we  can introduce a trainable function $s_\theta(\x,t)$ to learn $\bm{F}(\x,t)$ with the following target function:
+\begin{equation}
+    \label{eq:13.10}
+    \mathbb{E}_{\x_0\sim\tilde{p}(\x_{0})}\left[ \left\|  s_\theta(\x,t)  + \frac{(\x-\x_0,t)}{(\|\x-\x_0\|^2+t^2)^{(d+1)/2}}\right\|^2\right].
+\end{equation}
+However, we still need to perform sampling on $\x$ and $t$ in order to evaluate the above target function, and there is no clear definition on how this should be done. This is a major character behind PFGM, it defined the reverse generative process, without the need of defining the forward process. This one-step sampling is practically equivalent to the forward process. As such, the original paper considered an approach to construct samples of $\x$ and $t$ through perturbing each real sample as:
+\begin{equation}
+    \x=\x_0+\|\bm{\varepsilon}_{\x}\|(1+\tau)^{m}\bm{u},\qquad t=\|\varepsilon_t\|(1+\tau)^{m},
+\end{equation}
+in which $(\bm{\varepsilon}_{\x},\varepsilon_t)\sim\mathcal{N}(0,\sigma^2\bm{I}_{(d+1)\times(d+1)})$ and $m\sim\mathcal{U}[0,M]$. $\bm{u}$ is the unit vector that distribute uniformly on the $d$-dimensional hypersphere. $\tau$, $\sigma$ and $M$ are all constants.
+
+Finally, the training target in the original PFGM paper is slightly different from \cref{eq:13.10}, it is approximately equivalent to
+\begin{equation}
+    \label{eq:13.12}
+    \left\| s_\theta(\x,t) + \mbox{Normalise}\left(   \mathbb{E}_{\x_0\sim\tilde{p}(\x_{0})} \left[  \frac{(\x-\x_0,t)}{(\|\x-\x_0\|^2+t^2)^{(d+1)/2}}\right]\right)\right\|^2
+\end{equation}
+In the real implementation, we can only sample a finite number of $\x_0$ evaluate the expectation value inside the bracket. As such, this target function contains some bias. Although a biased target function is not necessarily worse than an unbiased one. Why such a target function was chosen in the original paper was unclear. Our best guess is because the biased estimation has introduced the normalisation operations in the vectors, which has made the training process numerically more stable. But this will also increase the batch size to achieve better accuracy, thus the training cost.
+
+Overall, in this section, we have introduced an ODE-based diffusion model that is inspired by the law of the gravitational forces. It has overcome the reliance on the Gaussian distributions on the diffusion models discussed before, and is a brand new theoretical framework that builds ODE-based diffusion model from the field theory, which is worth to be studied in details.
