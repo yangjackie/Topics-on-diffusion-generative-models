@@ -1,0 +1,111 @@
+\section{The General Procedure of Constructing an ODE (Part II)}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9497}}}
+
+After completing \cref{sect_15}, the author believed that a general procedure for constructing an ODE-based diffusion model had been completed. However, later, the author was brought into the attention of a new ICLR2023 article entitled ``\emph{Flow Straight and Fast, Learning to Generate and Transfer Data with Rectified Flow}''\cite{liu2022flow}, which provided another proposal for building an ODE-based diffusion model that is extremely simple and elegant. This will be discussed in this section.
+
+\subsection{The intuitive results}
+
+As we know, the diffusion model is modelling a stochastic process that evolves $\x_T$ to $\x_0$, whereas an ODE-based diffusion model fixes such an evolution process, by enforcing the evolution to occur by following an ODE:
+\begin{equation}
+    \label{eq:17.1}
+    \frac{d\xt}{dt}=f_t(\xt).
+\end{equation}
+The core of building an ODE-based diffusion model, is to design a function $f_t(\xt)$ that describes the trajectory of the evolving sample, and simultaneously, constitutes a transformation between two given distributions $p_0 (\x_0)$ and $p_T (\x_T)$. In other words, if we randomly sample $\x_T$ from $p_T (\x_T)$ and evolve it according to the above ODE, we would like to ensure the outcome $x_0$ follows the sample distribution $p_0 (\x_0)$. The idea from the original paper was very simple, we choose $\x_0\sim p_0(\x_0)$ and $\x_T\sim p_T(\x_T)$ randomly, and assume they transform into each other following the trajectory of 
+\begin{equation}
+    \label{eq:17.2}
+    \xt=\bm{\varphi}_t(\x_t,\x_0).
+\end{equation}
+Such a trajectory is defined by a known function that we are free to design. Theoretically, it only needs to satisfy the following boundary conditions:
+\begin{equation}
+    \label{eq:17.3}
+    \x_0=\bm{\varphi}_0(\x_0,\x_T),\qquad \x_T=\bm{\varphi}_T(\x_0,\x_T).
+\end{equation}
+while being a continuous function over $[\x_0,\x_T]$. From here, one can write out the differential equation that the trajectory function must satisfy:
+\begin{equation}
+    \label{eq:17.4}
+    \frac{d\xt}{dt}=\frac{d\bm{\varphi}_{t}(\x_0,\x_T)}{dt}.
+\end{equation}
+However, this differential equation does not have a practical value. This is because we want to generate $\x_0$ from a given $\x_T$, but the right-hand-side of \cref{eq:17.4} is also a function of $\x_0$, unless we have already known $\x_0$, in this case, we would not need a diffusion model in the first place. The ODE will only be practically useful if its right-hand-side is of a similar form as in \cref{eq:17.1}, which is only a function of $\xt$. (Theoretically, we can also make it dependent on $\x_T$, but we will not consider this case, in general.) In this case, an intuitive and innovative ideal was formed, that is, to learn a function $\bm{v}_\theta (\xt,t)$ to regress the right-hand-side of the above ODE. To do this, we optimise the following target:
+\begin{equation}
+    \label{eq:17.5}
+    \mathbb{E}_{\x_0\sim p_{0}(\x_0),\x_T\sim p_T(\x_T)}\left[\left\|\bm{v}_\theta (\xt,t) - \frac{d\bm{\varphi}_{t}(\x_0,\x_T)}{dt}\right\|_2^2\right].
+\end{equation}
+When $\bm{v}_\theta (\xt,t)$ is a sufficiently accurate approximation for $\frac{d\bm{\varphi}_{t}(\x_0,\x_T)}{dt}$, we can think \cref{eq:17.4} will still hold even if we replace its right-hand-side by $\bm{v}_\theta (\xt,t)$, from which we obtain a practically workable diffusion ODE:
+\begin{equation}
+    \label{eq:17.6}
+    \frac{d\xt}{dt}=\bm{v}_\theta (\xt,t).
+\end{equation}
+
+\subsection{A simple example}
+As a simple example, we assume $T=1$ and the sample evolves along a linear trajectory:
+\begin{equation}
+    \label{17.7}
+    \xt=\bm{\varphi}_t(\x_0,\x_1)=(\x_1-\x_0)t+\x_0.
+\end{equation}
+In this case, we have
+\begin{equation}
+    \label{eq:17.8}
+    \frac{\partial \bm{\varphi}_t(\x_0,\x_1)}{\partial t}=\x_1-\x_0,
+\end{equation}
+which leads to the following training target
+\begin{equation}
+    \label{eq:17.9}
+    \mathbb{E}_{\x_0\sim p_0(\x_0),\x_T\sim p_T(\x_T)}\Bigl[\left\| \bm{v}_{\theta}\Bigl((\x_1-\x_0)t+\x_0,t\Bigr)- (\x_1-\x_0)\right\|_2^2\Bigl],
+\end{equation}
+or  equivalently written as
+\begin{equation}
+    \label{eq:17.10}
+    \mathbb{E}_{\x_0,\xt\sim p(x_0)p_t(\xt|\x_0)}\left[ \left\|\bm{v}_{\theta}(\xt,t)-\frac{\xt-\x_0}{t} \right\|_2^2\right],
+\end{equation}
+which completes the whole process of constructing a diffusion model. This result is  identical to the result of linear trajectory as derived in \cref{sect_14}, and it is the key model being investigated in the original article, which was dubbed at the ``Rectified Flow''. From this example of  linear trajectory, it can be seen that the process of constructing an ODE-based diffusion model using this idea only contains a few lines of derivations, which is almost incredible in the sense that it overthrows the perception that the diffusion model is very complicated.
+
+\subsection{Further proofs}
+
+Nevertheless, the results presented above can only be considered as an intuitive guess, because we have not proven that, theoretically, the outcomes of training the model based on \cref{eq:17.5}, which leads to the ODE shown in \cref{eq:17.6}, will indeed lead to a transformation between the two probability distributions of $p_0(\x_0)$ and $p_T(\x_T)$. To achieve this goal, the author's initial thought was to prove that the optimum solution for the target distribution from \cref{eq:17.5} satisfies the following equation of continuity:
+\begin{equation}
+    \label{eq:17.11}
+    \frac{\partial p_{t}(\xt)}{\partial t}=-\nabla_{\xt}\Bigl( p_t(\xt)\bm{v}_{\theta}(\xt,t) \Bigr).
+\end{equation}
+If this is the case, then based on the correspondence between ODE and the equation of continuity derived in \cref{sect_12}. \cref{eq:17.6} is indeed describing the transformation between two probability distributions of $p_0(\x_0)$ and $p_T(\x_T)$.
+
+However, such a procedure is a bit cumbersome. Fundamentally, the equation of continuity itself is derived from the ODE through the use of the following relationship:
+\marginnote{\footnotesize{\textcolor{red}{This is basically another way of writing \cref{eq:12.3}.}}}
+\begin{equation}
+    \label{eq:17.12}
+\mathbb{E}_{\x_{t+\Delta t}}\Bigl[ \phi\left(\x_{t+\Delta t} \right)\Bigr]=E_{\xt}\Bigl[\phi \left(\x_t +f_t(\x_t)\Delta t \right) \Bigr].
+\end{equation}
+This means that \cref{eq:17.12} is a more fundamental starting point, for which we only need to prove the optimum solution for \cref{eq:17.5} satisfies this relationship, which contains $\xt$ as the only independent variable. For this, we write out the following, (in which we have short-handed $\varphi_t(\x_0,\x_T)$ as $\varphi_t$):
+\begin{align}
+    \mathbb{E}_{\x_{t+\Delta t}}\Bigl[ \phi\left(\x_{t+\Delta t} \right)\Bigr] &= \mathbb{E}_{\x_0,\x_T} \Bigl[ \phi\left(\varphi_{t+\Delta t}\right)\Bigr]\nonumber\\
+    &=\mathbb{E}_{\x_0,\x_T} \left[ \phi(\xt) +\Delta t\frac{\partial \varphi_t}{\partial t}\cdot\nabla_{\varphi}\phi(\varphi_t)  \right] \label{eq:17.13}\\
+    &= \mathbb{E}_{\x_0,\x_T} \left[ \phi(\xt)\right] + \Delta t \mathbb{E}_{\x_0,\x_T} \left[ \frac{\partial \varphi_t}{\partial t}\cdot\nabla_{\xt}\phi(\xt)  \right]\nonumber \\
+    &= \mathbb{E}_{\xt} \left[ \phi(\xt)\right] + \Delta t \mathbb{E}_{\x_0,\x_T} \left[ \frac{\partial \varphi_t}{\partial t}\cdot\nabla_{\xt}\phi(\xt)  \right].\nonumber
+\end{align}
+Here, the first equality is derived from \cref{eq:17.2}, the second equality comes from the first-order Taylor expansion, and the third equality also comes from \cref{eq:17.2}. Finally, in the last equality, the expectation taken over the variables $\x_0$ and $\x_T$ is equivalent to the expectation taken over $\xt$, since the latter is a well-defined function of $\x_0$ and $\x_T$. 
+
+Here, we can see that $\frac{\partial \varphi_t}{\partial t}$ is also a function of $\x_0$ and $\x_T$. We can make a further assumption that the function defined in \cref{eq:17.2} with respect to $\x_T$ is an invertible function, meaning we can solve for $\x_T=\psi(\x_0,\xt)$ from \cref{eq:17.2}. Substituting this into $\frac{\partial \varphi_t}{\partial t}$ enables us to write the above expectation as a function of $\x_0$ and $\xt$. With this, we have,
+\begin{align}
+    \mathbb{E}_{\x_{t+\Delta t}}\Bigl[ \phi\left(\x_{t+\Delta t} \right)\Bigr] &=\mathbb{E}_{\xt} \left[ \phi(\xt)\right] + \Delta t \mathbb{E}_{\x_0,\x_T} \left[ \frac{\partial \varphi_t}{\partial t}\cdot\nabla_{\xt}\phi(\xt)  \right] \nonumber\\
+    &=\mathbb{E}_{\xt} \left[ \phi(\xt)\right] + \Delta t \mathbb{E}_{\x_0,\xt} \left[ \frac{\partial \varphi_t}{\partial t}\cdot\nabla_{\xt}\phi(\xt)  \right] \label{eq:17.14}\\
+    &=\mathbb{E}_{\xt} \left[ \phi(\xt)\right] + \Delta t 
+  \mathbb{E}_{\xt}\left[  \underbrace{\mathbb{E}_{\x_0|\xt} \left[\frac{\partial \varphi_t}{\partial t}\right] }_{\mbox{\scriptsize{function of $\xt$}}} \cdot\nabla_{\varphi}\phi(\varphi_t) \right] \nonumber \\
+  &= \mathbb{E}_{\xt}\left[ \phi\left(\xt+\Delta t  \mathbb{E}_{\x_0|\xt} \left[\frac{\partial \varphi_t}{\partial t}\right] \right)\right].\nonumber
+\end{align}
+The second equation holds because now $\frac{\partial \varphi_t}{\partial t}$ is also a function of $\x_0$ and $\xt$, in this case, for the second expectation value, it can be rewritten as being taken over $\x_0$ and $\xt$. The third equality is equivalent to breaking down the joint distribution $p(\x_0,\xt)=p(\x_0|\x_t)p(\xt)$, in this case, it signifies that $\x_0$ and $\xt$ are not independent from each other, such that we have to write $\x_0|\xt$ to denote their inter-dependency. Note that   $\frac{\partial \varphi_t}{\partial t}$ is  a function of $\x_0$ and $\xt$, such that when we take the expectation value of it over $\x_0$, we are left with $\xt$ as the only independent variable. We shall see later that this is the function of $\xt$ that we are looking for! The last equality combines the two terms above with Taylor expansion. 
+
+Now we have derived the result
+\begin{equation}
+    \label{eq:17.15}
+    \mathbb{E}_{\x_{t+\Delta t}}\Bigl[ \phi\left(\x_{t+\Delta t} \right)\Bigr] =\mathbb{E}_{\xt}\left[ \phi\left(\xt+\Delta t  \mathbb{E}_{\x_0|\xt} \left[\frac{\partial \varphi_t}{\partial t}\right] \right)\right],
+\end{equation}
+which holds for any testing function $\phi$. This implies that
+\begin{equation}
+    \label{eq:17.16}
+    \x_{t+\Delta t} =\xt+\Delta t  \mathbb{E}_{\x_0|\xt} \left[\frac{\partial \varphi_t}{\partial t}\right] \quad\Rightarrow\quad \frac{\partial \xt}{\partial t}=\mathbb{E}_{\x_0|\xt} \left[\frac{\partial \varphi_t}{\partial t}\right] .
+\end{equation}
+This is the ODE that we are looking for. According to 
+\begin{equation}
+    \label{eq:17.17}
+    \mathbb{E}_{\x}[\x]=\argmin_{\bm{\mu}} \mathbb{E}_{\x}[\|\x-\bm{\mu}\|^2],
+\end{equation}
+it shows that the right-hand-side of \cref{eq:17.16} is exactly the optimum solution of the training target given in \cref{eq:17.5}. this proves that the optimum solution for \cref{eq:17.5}, which leads to \cref{eq:17.6}, is indeed providing a transformation between two distributions of $p_0(\x_0)$ and $p_T(\x_T)$.

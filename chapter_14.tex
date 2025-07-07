@@ -1,0 +1,252 @@
+\section{The General Procedure of Constructing an ODE (Part I)}
+\label{sect_14}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9370}}}
+
+Continuing from our discussions in the previous section, in which we have introduced an ODE-based diffusion generative model that was inspired by the gravitational field with a clear geometric meaning. Some readers may ask, it seems like the gravitational field may not be the only choice, is it possible to use other type of forces to construct the diffusion model under the same physical picture? On the other hand, even though the model is physically very trivial, there is a lack of mathematical proof that we could indeed learn the real sample distribution from it. 
+
+Here, we aim to provide a mathematically more accurate answer on what type of force field is suitable for constructing an ODE-based diffusion generative model.
+
+\subsection{The basic conclusions from the previous sections}
+
+To answer this question, we need to use a conclusion that we have derived in \cref{sect_12}, which finds the corresponding ODE for describing the change in the probability distributions from the starting ODE that describes the evolution of the samples. 
+
+Consider the first-order ODE on $\xt\in\mathbb{R}^d$ and $t\in[0,T]$:
+\begin{equation}
+    \label{eq:14.1}
+    \frac{d\xt}{dt}=f_t(\xt),
+\end{equation}
+which describes an (invertible) transformation from $\x_0$ to $\x_T$. If $\x_0$ was a random variable, then $\xt$ will also be a random variable throughout the transformation. The corresponding changes in the probability distribution can be described by the following ODE:
+\begin{equation}
+    \label{eq:14.2}
+    \frac{d}{dt}p_t(\xt)=-\nabla_{\xt} \Bigl(f_t(\xt)p_t(\xt)\Bigr).
+\end{equation}
+This equation could be derived by using the Jacobian and Taylor expansion as shown in \cref{sect_12}, or as we have done in \cref{sect:6}, we derived the full Fokker-Plank equation first, and then set $g_t=0$. It should be pointed out that, \cref{eq:14.2} is the famous \textbf{continuity equation} in physics, which reflects many different conservation laws.
+
+Returning to the diffusion model, our goal here, is to construct a transformation, that is capable of transforming a simple distribution into the target sample distribution. In principle, we could apply \cref{eq:14.2} to solve for a possible $f_t(\xt)$ with a given distribution $p_t(\xt)$, then using \cref{eq:14.1} to complete the generation process. However, noticing that we only have one equation [\cref{eq:14.2}] here but the target function $f_t(\xt)$ has $d$ components, so this is an indeterminate equation. In principle, we can solve the equation by assigning an arbitrary complete set of $p_{t}(\x_t)$ and solve for $f_t(\xt)$, not just the distributions at the boundaries corresponding to $t=0$ and $t=T$.
+
+As such, the construction of an ODE-based diffusion model is simply to solve an ODE with almost no constraints. Although this is conceptually true, it is particularly difficult to achieve in coding. Therefore, a more accurate way to rephrase the question is how can we solve for some practically more useful solutions from \cref{eq:14.2}.
+
+\subsection{Simplifying the equation}
+
+Noticing that, \cref{eq:14.2} can be rewritten in the following form:
+\begin{equation}
+    \label{eq:14.3}
+    \underbrace{\left(\frac{\partial}{\partial t},\nabla_{\xt}\right)}_{\nabla_{(t,\xt)}}\cdot \underbrace{\Bigl(p_t(\xt),f_t(\xt)p_t(\xt) \Bigr)}_{\bm{u}\in\mathbb{R}^{d+1}}=0.
+\end{equation}
+As shown above, we can treat $\left(\frac{\partial}{\partial t},\nabla_{\xt}\right)$ as the gradient $\nabla_{(t,\xt)}$ in the $(d+1)$-dimensional space, and $\Bigl(p_t(\xt),f_t(\xt)p_t(\xt) \Bigr)$ can be written as a $(d+1)$-dimensional vector, such that \cref{eq:14.2} can be casted into a simple divergence equation:
+\begin{equation}
+    \label{eq:14.4}
+    \nabla_{(t,\xt)}\bm{u}(t,\xt)=0.
+\end{equation}
+Under this form, we have 
+\begin{equation}
+    \label{eq:14.5}
+    \frac{d\xt}{dt}=f_t(\xt)=\frac{\bm{u}_{>1}(t,\xt)}{\bm{u}_1(t,\xt)},
+\end{equation}
+in which $\bm{u}_1$ and $\bm{u}_{>1}$ represent the first and last $d$ components of $\bm{u}(t,\xt)$. of course, we cannot forget the boundary conditions:
+\begin{equation}
+\label{eq:14.6}
+    \begin{cases}
+    \bm{u}_1(0,\x_0)=p_0(\x_0)  &\quad \mbox{(initial condition)} \\
+    \displaystyle{\int}\bm{u}_1(t,\xt)dt=1 &\quad \mbox{(integral condition)} 
+    \end{cases}
+\end{equation}
+in which $p_0(\x_0)$ is the target sample distribution. For the distribution at $t=T$, we only require it to be a distribution that is easy to sample from, with no other constraint to be imposed at this stage.
+
+\subsection{The Green's function}
+
+With the above transformation, we can treat $\bm{u}(t,\xt)$ as a vector field in the $(d+1)$-dimensional space, and \cref{eq:14.5} determines the trajectory of a point mass that is moving along the field direction. this then becomes consistent with the physical picture established in the last section based on the gravitational forces.
+
+In order to solve for a general solution for $\bm{u}(t,\xt)$, we can apply the mathematical tool of the Green's function. Firstly, let us try to solve the following problem
+\begin{equation}\label{eq:14.7}
+    \begin{cases}
+        \nabla_{(t,\xt)}\cdot G(t,0;\xt,\x_0)=0\\
+        G_{1}(0,0;,\xt,\x_0)=\delta(\xt-\x_0)\\
+        \displaystyle{\int}G_1(t,0;\xt,\x_0)d\xt=1.
+    \end{cases}
+\end{equation}
+It is not difficult to prove that, if the above equation holds, then we have
+\begin{equation}
+    \label{eq:14.8}
+    \bm{u}(t,\xt)=\int G(t,0;\xt,\x_0)p_0(\x_0) d\x_0=\mathbb{E}_{\x_0\sim p_0 (\x_0)}[ G(t,0;\xt,\x_0)],
+\end{equation}
+which is the solution to \cref{eq:14.4} that satisfies the corresponding constraints. In this case, we have successfully expressed $u(t,\xt)$ as some expectation value over the training samples, which will help the model training. It is not difficult to see that the Greeen's function $G(t,0;\xt,\x_0)$ is indeed the conditional probability $p(\xt|\x_0)$ in the diffusion model.
+
+As a matter of face, the Green's function $G(t,0;\xt,\x_0)$ that is defined in \cref{eq:14.7} is not the green's function that is usually defined. In the traditional definition, the Green's function corresponds to the solution at the point source of the field, whereas here, we have put the source at the boundary points. Even so, the Green's function $G(t,0;\xt,\x_0)$ defined here still possesses the properties of a normal Green's function, which is equivalent to a forcefield that is sourced from a point and is continuously distributed in the space.
+
+\subsection{The gravitational force}
+
+Now we will seek for some concrete solutions based on the above established mathematical framework. As we have mentioned before, both \cref{eq:14.4} and \cref{eq:14.7} are undetermined equations that give one equation to solve for $d+1$ unknowns. Theoretically, there exist infinitely many solutions of different forms. Therefore, to actually solve these equations, we must introduce some additional assumptions in order to arrive at a more concrete solution. The first assumption is the isotropic assumption, which corresponds to the results given in \cref{sect_13_gravity}.
+
+\subsubsection{An ansatz}
+
+We note that the isotropic property is referring to the state $(t,\xt)$ lying in the $(d+1)$-dimensional space being isotropic. It means that $G(t,0;\xt,\x_0)$  points to the origin at $(0,\x_0)$, and the modulus is only depending on $R=\sqrt{t^2+\|\xt-\x_0\|^2}$. As such, we can let
+\begin{equation}
+    \label{eq:14.9}
+    G(t,0;\xt,\x_0)=\varphi(R)(t,\xt-\x_0).
+\end{equation}
+From which we have 
+\marginnote{\textcolor{red}{\footnotesize{The first boundary condition as in \cref{eq:14.7}.}}}
+\begin{align}
+    0 &= \nabla_{(t,\xt)}\cdot G(t,0;\xt,\x_0) \nonumber \\
+      &= \left[\nabla_{(t,\xt)}\varphi(R)\right]\cdot(t,\xt-\x_0)+\varphi(R)\left[\nabla_{(t,\xt)}(t,\xt-\x_0) \right] \quad \mbox{(product rule)} \nonumber\\
+      &= \varphi^{\prime}(R)\cdot\frac{(t,\xt-\x_0)}{R}\cdot(t,\xt-\x_0)+(d+1)\varphi(R)\quad \mbox{(chain rule)} \nonumber\\
+      &=\varphi^{\prime}(R)R+(d+1)\varphi(R) \quad \mbox{(definition of R)} \nonumber\\
+      &=\frac{[\varphi(R)R^{d+1}]^{\prime}}{R^d}. \quad \mbox{(reversing the product rule)}\label{eq:14.10}
+\end{align}
+This implies that we must have $[\varphi(R)R^{d+1}]^{\prime}=0$ or $\varphi(R)R^{d+1}=C$, \emph{i.e.} $\varphi(R)=CR^{-(d+1)}$. As such, an ansatz for \cref{eq:14.7} is
+\begin{equation}
+    \label{eq:14.11}
+    G(t,0;\xt,\x_0)=C\times\frac{(t,\xt-\x_0)}{(t^2+\|\xt-\x_0\|)^{(d+1)/2}}.
+\end{equation}
+
+\subsubsection{Imposing the constraints}
+it can be seen from the above derivation, that under the assumption of isotropy, the gravitational field becomes the only possible ansatz. To further prove that this is a feasible solution, we must also check that it satisfies the other constraints, in which the key one is 
+\begin{equation}
+    \label{eq:14.12}
+    \int G_{1}(t,0;\xt,\x_0)d\xt=C\times\int\frac{t}{(t^2+\|\xt-\x_0\|)^{(d+1)/2}}d\xt=1.
+\end{equation}
+To prove this, we only need to show the integral is independent from $\x_0$ and $t$, and provided that a suitable normalisation constant $C$ is chosen, we can always make the value of the integral to be unity. For any $t>0$, we can make the substitution of $\bm{z}=(\xt-\x_0)/t$. Since $\xt\in\mathbb{R}^d$, we also have $\bm{z}\in\mathbb{R}^d$. With this, \cref{eq:14.12} becomes
+\begin{equation}
+    \label{eq:14.13}
+     \int G_{1}(t,0;\xt,\x_0)d\xt=C\times\int\frac{1}{(1+\|\bm{z}\|)^{(d+1)/2}}d\bm{z},
+\end{equation}
+which we can see now the integral is completely independent from $\x_0$ and $t$, so we just need to choose a suitable normalisation constant $C$ to make the integral to become unity. In the following discussions, we assume that such $C$ has already been chosen. 
+
+As for the initial values, we need to prove the limit $\displaystyle{\lim_{t\to 0^+}} G_{1}(t,0;\xt,\x_0)=\delta (\xt-\x_0)$, which we only need to show this based on the definition of the Dirac function: (1) When $\xt\neq\x_0$, the limit is obviously zero. (2) When $\xt=\x_0$, the limit is obviously 1. (3) As we have already shown, the integral of $G_{1}(t,0;\xt,\x_0)$ over $\x_t$ is always unity. These three points are the basic properties, or simply put, the definition of the Dirac function, so we have make sure the function has the correct initial values.
+
+\subsubsection{Result analysis}
+According to \cref{eq:14.8}, we now have 
+\begin{equation}
+    \label{eq:14.14}
+    \bm{u}(t,\xt)=C\times \mathbb{E}_{\x_0\sim p(\x_0)}\left[\frac{(t,\xt-\x_0)}{(t^2+\|\xt-\x_0\|^2)^{(d+1)/2}}\right],
+\end{equation}
+which we can further apply the relationship $\mathbb{E}_{\x}[\x]=\displaystyle{\argmin_{\bm{\mu}}}\mathbb{E}_{\x}[\|\x-\bm{\mu}\|^2]$ to construct a training target that is similar to score-matching. which will not be repeated here.
+
+It has been mentioned previously, that $G_1(t,0;\xt,\x_0)$ is equivalent to $p_t(\xt|\x_0)$, which we have now known the exact form 
+\begin{equation}
+    \label{eq:14.15}
+    p_t(\xt|\x_0)\propto  \frac{t}{(t^2+\|\xt-\x_0\|^2)^{(d+1)/2}},
+\end{equation}
+when $T$ is sufficiently large, the influence of $\x_0$ upon $p_t(\xt|\x_0)$ becomes negligible, in which case $p_t(\xt|\x_0)$ becomes the prior distribution that is independent from $\x_0$:
+\begin{equation}
+    \label{eq:14.16}
+    p_{prior}(\x_T)\propto \frac{T}{(T^2+\|\x_T\|^2)^{(d+1)/2}}.
+\end{equation}
+This is the same prior distribution as derived in \cref{sect_13_gravity} but it comes more naturally under the current framework. Since now we have $p_t(\xt|\x_0)$, in principle, we can also achieve the sampling of $\xt\sim p(\xt |\x_0)$. From \cref{eq:14.13}, we know that if we make the substitution of $\bm{z}=(\xt-\x_0)/t$, then we have
+\begin{equation}
+    \label{eq:14.17}
+    p(\bm{z})\propto \frac{1}{(1+\|\bm{z}\|^2)^{(d+1)/2}},
+\end{equation}
+From which we can first sample from $p(\bm{z})$ and then obtain $\xt$ from $\xt=\x_0+\bm{z}t$. As for the actual sampling of $p(\bm{z})$, since it only depends on the value of the modulus, we could first sample the modulus using the inverse cumulative function and then randomly sample an orientation to finish the entire sampling process, which is the same as sampling from the prior distribution. Nevertheless, when considering the remaining problems, we have discovered the following surprise!
+
+\subsubsection{Revisiting the problem}
+In \cref{sect_13_gravity}, we have mentioned that the sampling procedure provided in the original paper was of the following form,
+\begin{equation}
+\label{eq:14.18}
+    \xt=\x_0+\|\bm{\varepsilon}_{\x}\|(1+\tau)^{m}\bm{u},\qquad t=\|\varepsilon_t\|(1+\tau)^{m},
+\end{equation}
+in which $(\bm{\varepsilon}_{\x},\varepsilon_t)\sim\mathcal{N}(0,\sigma^2\bm{I}_{(d+1)\times(d+1)})$ and $m\sim\mathcal{U}[0,M]$. $\bm{u}$ is the unit vector that distribute uniformly on the $d$-dimensional hypersphere. $\tau$, $\sigma$ and $M$ are all constants. 
+
+Initially, it was thought that such a sampling procedure was purely a subjective design from the original authors, with not much reasoning. Subsequently, we found a surprising coincident, that this sampling procedure is a way to achieve the sampling from the distribution given in \cref{eq:14.17}. We shall prove this in the following discussions. First of all, we substitute the second half of \cref{eq:14.18} into the first half, which we get:
+\begin{equation}
+    \label{eq:14.19}
+    \xt=\x_0+t\frac{\|\bm{\varepsilon}_{\x}\|}{|\bm{\varepsilon}_{t}|}\cdot\bm{u},
+\end{equation}
+that is of exactly the same form of $\xt=\x_0+t\bm{z}$ derived above, and $\bm{u}$ is an isotropic random variable. In this case, the question becomes whether $\frac{\|\bm{\varepsilon}_{\x}\|}{|\bm{\varepsilon}_{t}|}$ follows the same probability distribution as $\|\bm{\varepsilon}\|$. The answer is yes. Paying attention to the face that when converting the probability distribution from the Cartesian to spherical coordinates, we need to multiply an extra term that is proportional to the radius to the power of $d-1$, as such, according to \cref{eq:14.17}, we have 
+\begin{equation}
+    \label{eq:14.20}
+    p(\|\bm{z}\|)\propto\frac{\|\bm{z}\|^{d-1}}{(1+\|\bm{z}\|^2)^{(d+1)/2}}.
+\end{equation}
+On the other hand, according to the choice of $(\bm{\varepsilon}_{\x},\varepsilon_t)\sim\mathcal{N}(0,\bm{I}_{(d+1)\times(d+1)})$ (Here, because we are only interested in the ratio between two probability distributions, the standard deviations cancel out each other, thus, for simplicity, we can let $\sigma=1$), so we have the following 
+\begin{equation}
+    \label{eq:14.21}
+    p(\|\bm{\varepsilon}_{\x}\|)\propto \|\bm{\varepsilon}_{\x}\|^{d-1}e^{-\|\bm{\varepsilon}_{\x}\|^2/2}, \qquad p(|\varepsilon_t|)\propto e^{-|\varepsilon_t|^2/2}.
+\end{equation}
+Let $r=\|\bm{\varepsilon}_{\x}\|/|\varepsilon_t|$, such that $\|\bm{\varepsilon}_{\x}\|=r|\varepsilon_t|$, then take the usage of equality in probability, we have 
+\begin{align}
+    p(r)dr &=\mathbb{E}_{|\varepsilon_t|\sim p(|\varepsilon_t|)}\left[p(\|\bm{\varepsilon}_{\x}\|=r|\varepsilon_t|) d(r|\varepsilon_t|) \right] \nonumber\\
+    &\propto \mathbb{E}_{|\varepsilon_t|\sim p(|\varepsilon_t|)}\left[ r^{d-1}|\varepsilon_t|^d e^{-r^2 |\varepsilon_t|^2/2} d r \right]\nonumber\\
+    &\propto\int_0^\infty r^{d-1}|\varepsilon_t|^d e^{-r^2 |\varepsilon_t|^2/2}e^{- |\varepsilon_t|^2/2} d|\varepsilon_t|dr\nonumber\\
+    &\propto \int_0^\infty r^{d-1}|\varepsilon_t|^d e^{- (r^2+1)|\varepsilon_t|^2/2} d|\varepsilon_t|dr\nonumber\\
+    &=\frac{r^{d-1}}{(1+r^2)^{(d+1)/2}}\int_0^\infty s^d e^{-s^2/2}dsdr\qquad (s=|\varepsilon_t|\sqrt{r^2+1})\nonumber\\
+    &\propto\frac{r^{d-1}}{(1+r^2)^{(d+1)/2}}\label{eq:14.22}
+\end{align}
+This shows that $p(r)$ is fully equivalent to \cref{eq:14.20}. As such, using $(\|\bm{\varepsilon}_{\x}\|/|\varepsilon_{t}|)\bm{u}$ has indeed provided an effective sampling strategy for $\bm{z}$, which is numerically much easier than using the inverse cumulative function. But this was not explicitly mentioned in the original paper.
+
+\subsection{Space-time separation}
+
+What we have done so far is to solve for $(t,\xt)$ under the assumption of isotropy is the $(d+1)$-dimensional space. To some extent, this counts for the simplest possible solution, although some readers might find it difficult to accept, as this gravitational field-based generative model is seemingly more complicated mathematically. However, when solving the mathematical physics equations, it is very common that we  to try solving the problem first by starting from a simple isotropic ansatz.
+
+Nevertheless, it is indeed difficult to rationalise the isotropic nature of $(t,\xt)$ when taking the space-time variables together as a whole. We are more comfortable in dealing with isotropy in space by separating out the time variable. Here, we shall seek for the solution under the separation of time and space.
+
+\subsubsection{An ansatz}
+
+What the above discussions imply here, are that the isotropy should now apply only to the spatial variable $\xt$ in the $d$-dimensional space, and we will separate $G(t,0;\xt,\x_0)$ into two parts $G_1 (t,0;\xt,\x_0)$ and $G_{>1}(t,0;\xt,\x_0)$ to help with our understanding. Here, $G_1 (t,0;\xt,\x_0)$ is only a scalar, in which case, isotropy implies that it only depends on the modulus $r=\|\x_t-\x_0\|$, which we shall denote it as $\phi_t(r)$. Whereas $G_{>1}(t,0;\xt,\x_0)$ is a $d$-dimensional vector, and isotropy implies that it points to $\x_0$ from all directions, and the modulus is only dependent upon $r=\|\x_t-\x_0\|$. As such, we can let
+\begin{equation}
+    \label{eq:14.23}
+G_{>1}(t,0;\xt,\x_0)=\varphi_t(r) (\xt-\x_0).
+\end{equation}
+With this, we have [from \cref{eq:14.4}]:
+\begin{align}
+    0&=\frac{\partial}{\partial t}\phi_t(r) +\nabla_{\xt}\Bigl(\varphi_t(r) (\xt-\x_0)\Bigr)\nonumber\\
+    &=\frac{\partial}{\partial t}\phi_t(r) + r\frac{\partial}{\partial r}\varphi_t (r)+d\varphi_t(r)\nonumber\\
+    &=\frac{\partial}{\partial t}\phi_t(r) + \frac{1}{r^{d-1}}\frac{\partial}{\partial r} \Bigl(\varphi_t(r)r^d \Bigr).\label{eq:14.24}
+\end{align}
+Here, we have two undetermined functions $\phi_t(r)$ and $\varphi_t(r)$ but only one differential equation, which makes it easier to solve. Since the conditional constraint is applied to $G_1 (t,0;\xt,\x_0)$, that is, to the function $\phi_t(r)$ not $\varphi_t(r)$, in this case, we could, for simplicity, solve for $\varphi_t(r)$ with a given function of $\phi_t(r)$ that satisfies the constraints. With this, the solution for \cref{eq:14.24} is 
+\begin{equation}
+    \label{eq:14.25}
+    \varphi_t(r) =-\frac{1}{r^d}\int\frac{\partial}{\partial t}\phi_t(r)r^{d-1}dr=-\frac{1}{r^d}\frac{\partial}{\partial t}\int \phi_t(r)r^{d-1}dr.
+\end{equation}
+
+\subsubsection{Gaussian diffusion}
+Here, we shall further prove that, the common ODE-based diffusion model that builds upon the Gaussian distribution is a special case for \cref{eq:14.25}. For the assumption that is based on the Gaussian distribution, we have the following transition probability:
+\begin{equation}
+    \label{eq:14.26}
+    G_{1}(t,0;\xt,\x_0)=p_t(\xt|\x_0)=\frac{1}{(2\pi\sigmat^2)^{d/2}}e^{-\|\xt-\x_0\|^2/2\sigmat^2},
+\end{equation}
+\emph{i.e.} $\phi_t(r)=\frac{1}{(2\pi\sigmat^2)^{d/2}}e^{-r^2/2\sigmat^2}$, in which $\sigmat$ is a monotonically increasing function of the time variable $t$. It satisfies the boundary condition that $\sigma_0=0$ and $\sigma_T$ being sufficiently large. $\sigma_0=0$ is set to satisfy the initial value condition, and $\sigma_T$ is to be made sufficiently large in order to make the prior distribution becomes independent from the sample distribution. As for the unity integral constraint, this is naturally satisfied by the Gaussian distribution. 
+
+Substituting \cref{eq:14.26} into \cref{eq:14.25} we have the following solution
+\begin{equation}
+    \label{eq:14.27}
+    \varphi_t(r)=\frac{\dot{\sigmat}}{(2\pi\sigmat^2)^{d/2}\sigmat}e^{-r^2/2\sigmat^2}=\frac{\dot{\sigmat}}{\sigmat}\phi_t(r),
+\end{equation}
+in which the integration over $r$ has taken the usage of the incomplete Gamma function that the author has derived it with the help of Mathematica. With this solution, we have
+\begin{align}
+    \bm{u}_1 (t,0;\xt,\x_0)&=\int p_t(\xt|\x_0)p(\x_0)d\x_0=p_t (\xt)\qquad \mbox{[from \cref{eq:14.26}]}\nonumber \\
+    \bm{u}_{>1} (t,0;\xt,\x_0)&=\int \frac{\dot{\sigmat}}{\sigmat}(\xt-\x_0)p_t(\xt|\x_0)p_0(\x_0)d\x_0 \nonumber\\
+    &=-\dot{\sigmat}\sigmat\int\nabla_{\xt}p_t(\xt|\x_0)p_0(\x_0)d\x_0 \nonumber\\
+    &=-\dot{\sigmat}\sigmat\nabla_{\xt}p_t(\xt),\label{eq:14.29}
+\end{align}
+in which, based on \cref{eq:14.5}, we have 
+\begin{equation}
+    \label{eq:14.29}
+    f_t(\xt)=\frac{\bm{u}_{>1}(t,\xt)}{\bm{u}_{1}(t,\xt)}=-\dot{\sigmat}\sigmat\nabla_{\xt}\log p_t(\xt).
+\end{equation}This result is identical to those derived in \cref{sect_12}
+
+\subsection{Reverse engineering}
+Solving for $\varphi_t(r)$ with a given $\phi_t(r)$ is theoretically simple,  but there are two major challenges: (1) It is difficult to construct a function $\phi_t(r)$ that is simultaneously satisfying both the initial value and the integral conditions, and (2) One cannot guarantee that the integration over $r$ will always have a simple analytical form. As such, we need to come up with a method of reverse engineering to construct $\phi_t(r)$. 
+
+We know that $\phi_t(r)$ is the probability density under the Cartesian coordinates, which, upon transformation into the spherical harmonics, one must multiply it with $C_d r^{d-1}$, in which $C_d$ is a $d$-dependent constant. Based on \cref{eq:14.5} that the final result is a ratio that will not be affected by this constant, so we can ignore it for simplicity. This leads straight to the integrand in \cref{eq:14.25}. As such the integral in  \cref{eq:14.25}
+\begin{equation}
+    \label{eq:14.30}
+    \int\phi_t(r)r^{d-1}dr
+\end{equation}
+is a cumulative probability function. It is not always easy to calculate the cumulative probability function through integration, but going the other way around via differentiation is very easy. As such, we could build the cumulative probability function, and then solve for the corresponding $\phi_t(r)$ and $\varphi_t(r)$, bypassing the challenge of integration. 
+
+To build the cumulative probability function $\psi_t(r)$, it must satisfy the following conditions: (1) $\psi_t(0)=0$ and $\psi_t(\infty)=1$. (2) $\psi(r)$ is a monotonically increasing function of $r$. (3) $\forall r>0$, $\displaystyle{\lim_{t\to 0^{+}}\psi_t(r)=1}$. For people who are familiar with the activation function, it should not be difficult to construct such functions, it is basically the smoothed approximation to the step function such as $\tanh (r/t)$ and $1-e^{-r/t}$. With the cumulative function $\psi_t(r)$, and based on \cref{eq:14.25}, we have 
+\begin{equation}
+    \label{eq:14.31}
+    \phi_t(r)=\frac{1}{r^{d-1}}\frac{\partial}{\partial r}\psi_t(r),\qquad \varphi_t(r)=-\frac{1}{r^d}\frac{\partial}{\partial t}\Bigl(\phi_t(r)+\lambda_t\Bigr),
+\end{equation}
+in which $\lambda_t$ is an arbitrary function of $t$, which can be set as zero in the usual situation. Certainly, all of the isotropic solutions are fundamentally equivalent to each other, including the results derived for the gravitational diffusions. They all could be included in the equations above. We can also derive different outcomes using coordinate transformation, as the cumulative function $\psi_t(r)$ is only a function of a scalar variable, and we can transform the cumulative probability function for different distributions, providing they are all well-behaved monotonically increasing functions.
+
+\subsection{Summary}
+
+To summarise, here, we have constructed a general framework of building ODE-based diffusion model. Theoretically speaking, the framework encompassed all ODE-based diffusion models, from which we can construct any type of new and funky diffusion models. For examples, the current derivations are all based on the isotropic assumption, which we could change $\varphi(R)$ into a more generic form of $\varphi(t;\xt,\x_0)$ and solve the partial differential equation using the method of characteristic, to obtain a family of new models. Overall, this is really a factory of ODE-based diffusion models.
+
+Some readers may ask, what is the purpose of deriving so many variants for diffusion models, if we just want a diffusion generative model that is practically workable. As a matter of fact, we want to discover and understand the fundamental principles behind the constructions of the diffusion generative models, such that we may discover other diffusion models that are more efficient. This is a never-ending process of perfectionism. 
+
+
+The numerical experimental results from the previously discussed gravitational diffusion model, as an ODE-based one, already led to a slightly better result than the conventional Gaussian diffusion model. This shows that, even they are all based on the isotropy assumption, the practical performances of these mathematically equivalent models can still be different from each other. Therefore, answering the question of what is a better design for the diffusion model would be a very meaningful research direction in the future.

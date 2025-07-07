@@ -1,0 +1,175 @@
+\section{The General Procedure of Constructing an ODE (Part II)}
+\label{sect_15}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9379}}}
+
+When writing the previous section, the author believed that we had already found a general procedure for constructing an ODE-based diffusion generative model. However, a reader has later provided a more efficient and straightforward alternative, which the author  was truly amazed by the inspiration behind the model. After some  discussions and thoughts, the author discovered that the fundamental idea behind this new approach is based on the \textbf{method of characteristics} for solving the first-order partial differential equations, in which we first construct a particular vector field to enforce the initial condition, and then the differential equation will be solved to match the boundary conditions that are to be satisfied by the end points. As such,  the conditions for both the starting and end points that need to be matched are satisfied simultaneously. This is a really smart approach, which the author will summarise his thoughts in this section, as a sequel to the previous section.
+
+\subsection{Revisiting the previous results}
+
+We shall first briefly revise the results from the previous section. Suppose a random variable $\x_0\in\mathbb{R}^d$ will transform itself continuously in space into $\x_T$ by following an ODE of the form,
+\begin{equation}
+    \label{eq:15.1}
+    \frac{d\xt}{dt}=f_t(\xt),
+\end{equation}
+then the corresponding probability distribution $p_t (\xt)$ at any given time $t$ shall follow the following continuity equation:
+\begin{equation}
+    \label{eq:15.2}
+    \frac{\partial}{\partial t}p_t(\xt)=-\nabla_{\xt}\cdot\Bigl(f_t(\xt)p_t(\xt)\Bigr).
+\end{equation}
+By letting $\bm{u}(t,\xt)=\bigl(p_t(\xt),f_t(\xt)p_t(\xt)\bigr)\in \mathbb{R}^{d+1}$, then the above equation can be simplified into 
+\begin{equation}
+\label{eq:15.3}
+    \begin{cases}
+        \nabla_{(t,\xt)}\cdot\bm{u}(t,\xt)=0\\
+        \bm{u}_1(0,\x_0)=p_0(\x_0),\quad \displaystyle{\int \bm{u}_{1}(t,\xt)d\xt=1}.
+    \end{cases}
+\end{equation}
+To solve this equation, we applied the technique of Green's function, in which we first solve
+\begin{equation}
+    \label{eq:15.4}
+    \begin{cases}
+        \nabla_{(t,\xt)}\cdot G(t,0;\xt,\x_0)=0\\
+        G_{1}(0,0;\xt,\x_0)=\delta(\xt-\x_0),\qquad \displaystyle{\int G_{1}(t,0;\xt,\x_0)=1}.
+    \end{cases}
+\end{equation}
+From here, we have the following solution
+\begin{equation}
+    \bm{u}(t,\xt)=\int G(t,0;\xt,\x_0)p_0 (\x_0)d\x_0=\mathbb{E}_{\x_0\sim p_0(\x_0)}\left[G(t,0;\xt,\x_0)\right],
+\end{equation}
+which satisfies our boundary conditions.
+
+\subsection{Geometric interpretations}
+The idea behind Green's function is simple. First of all, let us forget about synthesising a complex set of data, by just assuming we only have one data point $\x_0$ and try to figure out how we should synthesise this single data. This may look simple, in which we can simply take $\x_T\times 0+\x_0$. However, this is an oversimplification, because we want a slowly-varying and continuous transformation, such that for any arbitrary $x_t$ at $t<T$, it will follow a smooth trajectory to $\x_0$ at $t=0$.
+
+Since we are only interested in building a diffusion generative model, in principle, we are not interested in the actual shape of the trajectory, as long as they all pass through $\x_0$. In this case, we could choose any clusters of trajectories that we prefer, which will be collectively denoted as 
+\begin{equation}
+    \label{eq:15.6}
+    \bm{\varphi}_t(\xt|\x_0)=\x_T.
+\end{equation}
+Let us emphasise again that this represents a cluster of trajectories that take $\x_0$ as the starting point and the $\x_T$ as the end point. The independent and dependent variables in each trajectory are $t$ and $\xt$, respectively. The starting point $\x_0$ is always fixed, whereas the final endpoint $\x_T$ is variable. There is also no restriction on the shape of the trajectory, we could choose a straight line, a parabola or anything else.
+
+Now we take the total derivatives to the both sides of \cref{eq:15.6}. \marginnote{\footnotesize{\textcolor{red}{Not quite sure about this. This probably comes from the total derivative of function $f(\x(t),t)$ with respect to $t$ is given by $\frac{\partial f}{\partial \x}\frac{d\x}{dt}+\frac{\partial f}{\partial t}$.}}} As $\x_T$ can be changed arbitrarily, it is equivalent to the integration constant in the differential equation, and its derivative is simply 0, as such, we have,
+\begin{equation}
+    \label{eq:15.7}
+    \frac{\partial \varphi_t(\xt|\x_0)}{\partial \xt}\frac{d\xt}{dt}+\frac{\partial \varphi_t(\xt|\x_0)}{\partial t}=\bm{0},
+\end{equation}
+which gives,
+\begin{equation*}
+\frac{d\xt}{dt}=-\left( \frac{\partial \varphi_t(\xt|\x_0)}{\partial \xt} \right)^{-1} \frac{\partial \varphi_t(\xt|\x_0)}{\partial t}.
+\end{equation*}
+Comparing this to \cref{eq:15.1}, we obtain 
+\begin{equation}
+    \label{eq:15.8}
+    f_t(\xt|\x_0)=-\left( \frac{\partial \varphi_t(\xt|\x_0)}{\partial \xt} \right)^{-1} \frac{\partial \varphi_t(\xt|\x_0)}{\partial t}.
+\end{equation}
+Here, we have changed the original function of $f_t(\xt)$ into  $f_t(\xt|\x_0)$ to signify that all the trajectories have a common starting point of $\x_0$. This implies that, the trajectories from the force field built from this ODE will always pass through $\x_0$. This makes sure the initial value condition for the Green's function is always satisfied. 
+
+\subsection{The method of characteristics}
+
+Once we have the condition for the initial value, we could ask further on how to satisfy the condition for the final value, which we want $\x_T$ to follow a simple distribution that is independent from $\x_0$. The limitation in the derivations shown in the previous section is that we cannot guarantee the final value follows a simple distribution, and must be analysed case-by-case in a post-hoc fashion. Here, our design principle is to satisfy the condition that is imposed on the initial values directly through the design of $\varphi_t(\xt|\x_0)$, which leaves us with plenty of rooms to satisfy the conditions imposed on the final value. Once these conditions are satisfied, the integration constraint will be naturally satisfied provided that the continuity equation [\cref{eq:15.2}] is also satisfied.
+
+Mathematically speaking, what we want to do is to solve \cref{eq:15.2} with a given $f_t(\xt|\x_0)$ and $P_{T}(\x_T)$. This is a first-order partial differential equation which may be solved using the method of characteristics. Firstly, we rewrite \cref{eq:15.2} into the following equivalent form:
+\begin{equation}
+    \label{eq:15.9}
+    \frac{\partial}{\partial t}p_t(\xt|\x_0)+\nabla_{\xt}p_t(\xt|\x_0)\cdot f_t(\xt|\x_0)=-p_t(\xt|\x_0) \nabla_{\xt}f_t(\xt|\x_0).
+\end{equation}
+Similarly as before, we seek for its solution with a fixed starting point $\x_0$, such that we have rewritten $p_t (\xt)$ as $p_t(\xt|\x_0)$ to signify this as the solution with starting point $\x_0$.
+
+The idea behind the method of characteristics is to first seek the solution of a partial differential equation along a specified trajectory, which transforms the partial differential equation into an ordinary differential equation, making it easier to solve. More specifically, we assume that $\xt$ is a function of $t$, and solve the partial differential equation along the trajectory that is defined by \cref{eq:15.1}. As \cref{eq:15.1} holds, we could replace $f_t(\xt|\x_0)$ in \cref{eq:15.9} by $\frac{d\xt}{dt}$, such that the L.H.S. of \cref{eq:15.9} becomes the total derivative of $P_t(\xt|\x_0)$, which gives us
+\begin{equation}
+    \label{eq:15.10}
+    \frac{d}{dt}p_t(\xt|\x_0)=-p_t(\xt|\x_0)\nabla_{\xt}f_t(\xt|\x_0).
+\end{equation}
+Noted that, at this point, all $\xt$ should be replaced by a function with respect to $t$, which, in principle, can be solved from the equation for the trajectory [\cref{eq:15.6}]. With this substitution, both $p$ and $f$ in the above equation become purely the functions of $t$, such that the above equation is just  linear ordinary differential equation of $p$, which should have the following solution:
+\begin{equation}
+    \label{eq:15.11}
+    p_t(\xt|\x_0) =C\exp \left( \int_t^T\nabla_{\x_s} f_s(\x_s|\x_0)ds \right).
+\end{equation}
+Substituting the condition for the final value $p_T (\x_T)$, we have $C=p_T (\x_T)$, such that 
+\begin{equation}
+    \label{eq:15.12}
+    p_t(\xt|\x_0) =p_T (\x_T)\exp \left( \int_t^T\nabla_{\x_s} f_s(\x_s|\x_0)ds \right).
+\end{equation}
+If we further substitute into the equation for the trajectory [\cref{eq:15.6}], we obtain a function that will only include $\x_0$, $\xt$ and $t$. This is the final result for the Green's function that we are trying to solve, i.e. $G_{1}(t,0;\xt,\x_0)$. Correspondingly, $G_{>1}(t,0;\xt,\x_0)=p_t(\xt|\x_0)f_t(\xt|\x_0)$.
+
+\subsection{The training target}
+From the Green's function, we obtain the following:
+\begin{align}
+    \bm{u}_{1}(t,\xt)&=\int p_t (\xt|\x_0) p_0(\x_0)d\x_0 = p_t(\xt)\nonumber\\
+    \bm{u}_{>1}(t,\xt)&=\int f_t(\xt|\x_0)p_t (\xt|\x_0) p_0(\x_0)d\x_0, \label{eq:15.13}
+\end{align}
+which leads to
+\begin{align}
+    f_t(\xt) &= \frac{\bm{u}_{>1}(t,\xt)}{\bm{u}_{1}(t,\xt)} \nonumber\\
+    &=\int f_t (\xt|\x_0)\frac{p_t (\xt|\x_0) p_0(\x_0)}{p_t(\xt)}d\x_0\nonumber\\
+    &=\int f_t (\xt|\x_0) p_t(\x_0|\xt)d\x_0 \nonumber\\
+    &=\mathbb{E}_{\x_0\sim p_t(\x_0|\xt)}[f_t(\xt|\x_0)].\label{eq:15.14}
+\end{align}
+Based on the discussion in \cref{sect_5:SDE}, in which we built the training function based on score-matching, we can build our training target here similarly as
+\begin{align}
+    &\quad\mathbb{E}_{\xt\sim p(\xt)}\biggl[ \mathbb{E}_{\x_0\sim p_t(\x_0|\xt)}\left[\left\|v_\theta(\xt,t)-f_t(\xt|\x_0) \right\|_2^2\right]\biggr] \nonumber\\
+    &=\mathbb{E}_{\x_0,\xt\sim p_t (\xt|\x_0)p(\x_0)}\Bigl[ \left\|v_\theta(\xt,t)-f_t(\xt|\x_0) \right\|_2^2\Bigr],\label{eq:15.15}
+\end{align}
+which has the same form as the \textbf{conditional flow matching} given in the article entitled ``Flow Matching for Generative Modelling''\cite{lipman2022flow}. As we shall see later, the results from this article can all be derived using the method proposed above. After model training, sampling can be achieved simply by solving the differential equation $\frac{d\xt}{dt}=v_\theta(\xt,t)$. It can be seen from \cref{eq:15.15} that, the only requirement that we have here is to have a distribution $p_t(\xt|\x_0)$ that is easy to sample from.
+
+\subsection{A few examples}
+
+Probably the abstract results from above are not easy to be understood. In what follows, we will provide some examples to help developing some intuitive understanding.
+
+\subsubsection{Linear trajectory}
+As the simplest example, we assume that $\x_T$ transforms into $\x_0$ by following a linear trajectory. For simplicity, we can also set $T=1$. Without  loss of generality, we can write the equation for $\xt$ as 
+\begin{equation}
+    \xt=(\x_1-\x_0)t+\x_0\quad\Rightarrow\quad \frac{\xt-\x_0}{t}+\x_0=\x_1.\label{eq:15.16}
+\end{equation}
+According to \cref{eq:15.8}, we have
+\begin{equation}
+    \label{eq:15.17}
+    f_t(\xt|\x_0)=\frac{\xt-\x_0}{t},
+\end{equation}
+and now $\nabla_{\xt} \cdot f_t(\xt|\x_0)=\frac{d}{t}$, such that, according to \cref{eq:15.12}, we have
+\begin{equation}
+    \label{15.18}
+    p_t(\xt|\x_0)=\frac{p_1(\x_1)}{t^d}.
+\end{equation}
+Now substituting in the expression for $\x_1$ from \cref{eq:15.16}, we have
+\begin{equation}
+    \label{eq:15.19}
+    p_t(\xt|\x_0)=\frac{p_1\left(\frac{\xt-\x_0}{t}+\x_0\right)}{t^d}.
+\end{equation}
+More specifically, if $p_1(\x_1)$ follows the standard normal distribution, then the above equation should follow $p_t(\x|x_0)\sim\mathcal{N}(\xt;(1-t)\x_0,t^2\bm{I})$, which corresponds to the result from the Gaussian diffusion model. The new result under this framework, \textit{is to allow us to choose more general prior distributions}, such as the uniform distribution. Also, when introducing the score-matching in \cref{eq:15.15}, we already mentioned that all we need to know is how to sample from the distribution of $p_t(\xt|\x_0)$, and \cref{eq:15.19} tells us that this is easily achievable if the prior distribution is on that is easy to sample from. This is because 
+\begin{equation}
+    \label{eq:15.20}
+    \xt\sim p_{t}(\xt|\x_0) \quad\Leftrightarrow\quad \xt=(1+t)\x_0+t\bm{\varepsilon}\quad \bm{\varepsilon}\sim p_1(\bm{\varepsilon}).
+\end{equation}
+
+\subsubsection{A further generalisation}
+The above result can be further generalised into the following:
+\begin{equation}
+    \label{eq:15.21}
+\xt=\bm{\mu}_t(\xt)+\sigmat\x_1 \quad \Rightarrow\quad \x_1 =\frac{\xt-\bm{\mu}_t(\x_t)}{\sigmat}.
+\end{equation}
+Here, $\bm{\mu}_t(\xt)$ is any arbitrary function that satisfies the boundary conditions of $\bm{\mu}_0(\x_0)=\x_0$ and $\bm{\mu}_1(\x_0)=0$, that is defined over the domain of $\mathbb{R}^d\to\mathbb{R}^{d}$. $\sigmat$ is a monotonically increasing function from $\sigma_0=0$ to $\sigma_1=1$. According to \cref{eq:15.8}, we have the following
+\begin{equation}
+    \label{eq:15.22}
+    f_t(\xt|\x_0)=\dot{\bm{\mu}}_t(\x_0)+\frac{\dot{\sigmat}}{\sigmat}\Bigl(\xt -\bm{\mu}_t(\x_0) \Bigr).
+\end{equation}
+This is equivalent to Eq. (15) in the article ``Flow Matching for Generative Modelling''. Now $\nabla_{\xt}f_t(\xt|\x_0)= d\dot{\sigmat}/\sigmat$, and from \cred{eq:15.12}, we have 
+\begin{equation}
+    \label{eq:15.23}
+p_t(\xt|\x_0)=p_1 (\x_1)/\sigmat^d.
+\end{equation}
+Substituting in the expression for $\x_1$, we have the following final result:
+\begin{equation}
+    \label{eq:15.24}
+p_t(\xt|\x_0)=\frac{p_1 \left(\frac{\xt-\bm{\mu}_t(\x_0)}{\sigmat}\right)}{\sigmat^d}.
+\end{equation}
+This is the general result for linear ODE based diffusion model. It include prior distributions that can be either Gaussian or non-Gaussian.
+
+\subsubsection{Even more complicated?}
+In all the examples above, the transformations (or the trajectories) from $\x_0$ to $\xt$ are all established based on a simple linear interpolation function of $t$. A natural question to ask is, then, can we consider more complicated trajectories? This is theoretically possible. However, using more complex trajectories implies the need to embed more assumptions in the model, and it is usually difficult for us to prove whether all the target data follow these assumptions. Therefore, it is usually not necessary to consider more complex trajectories. In addition, for complex trajectories, it becomes more difficult to derive analytical solutions, making it impossible to proceed both theoretically and practically.
+
+Most importantly, we are now only dealing with the trajectories for synthesising a single sample. It is not difficult to show that, even though this trajectory is a straight line, for synthesising multiple samples, the trajectories will lead to a more  complex curves. In this case, if we already made the trajectory for synthesising a single sample to be unnecessarily complicated, then for multiple samples, the complexities behind the trajectories will be extremely high, making the model more likely to become unstable.
+
+\subsection{Summary}
+In summary, we have followed the context from the previous section, and further discussed the idea behind building an ODE-based diffusion model. This time, starting from a geometric intuition, we build specific vector fields to ensure the results follows the distributions of the initial values, and satisfy those for the final values by solving the differential equations. This allows us to solve for the Green's function that satisfies the conditions that both the initial and final values should follow. More specifically, it allows us to use any simple distributions as the prior distributions, thus overcoming the reliance on the Gaussian distributions in constructing the diffusion models.
+

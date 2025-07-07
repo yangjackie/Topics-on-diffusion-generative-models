@@ -1,0 +1,192 @@
+\section{Wasserstein Distance $\leq$ Score-Matching}
+\label{sect_16}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9467}}}
+
+The Wasserstein distance, is a distance measure that quantifies the differences between two probability distributions defined based on the optimum transport theory. Many readers first came across the Wasserstein distance were probably from the birth of WGAN in 2017, which opened up a new branch for understanding GAN from the perspective of the optimum transport theory. It also made this theory start to play more important role in machine learning. For a long time, GAN has been the leader in the generative modelling, until the rise of the diffusion models in the past few years, even though GAN still remains as a compelling generative model.
+
+The fundamental model architectures behind the diffusion models and GAN are very different, therefore, the research on these two models have been relatively independent from each other. However, the article entitled ``\textit{Score-Based Generative Modelling Secretly Minimizes the Wasserstein Distance}''\cite{kwon2022score} published at the end of 2022 had broken this barrier. It proved that the loss function for the diffusion model derived from the score-matching can be written as the upper limit of the Wasserstein distance. This implies that, when weminimise the loss function for the diffusion model, what we do is effectively the same as WGAN, in which the Wasserstein distance between two probability distributions is also minimised.
+
+\subsection{Result analysis}
+
+More specifically, the results presented in the original paper, was directly aligned with the SDE-based diffusion generative models discussed previously in \cref{sect_5:SDE}. The core result is the following inequality:
+\begin{equation}
+    \label{eq:16.1}
+    \mathcal{W}_{2}[p_0,q_0]\leq \int_0^T g_t^2 I_t\Bigl( \mathbb{E}_{\xt\sim p_t (\xt)} \Bigl[ \left\|\nabla_{\xt}\log p_{t}(\xt)-s_{\theta}(\xt,t)\right\|_2^2\Bigr]\Bigr)^{\frac{1}{2}}dt+I_T\mathcal{W}_2[p_T,q_T],
+\end{equation}
+in which $I_t$ is a non-negative function of $t$, the meaning of which will be discussed later. 
+
+How should we understand this inequality? Firstly, a diffusion model can be understood as a motion from $t=T$ to $t=0$ that is described by an SDE. The terms $p_T$ and $q_T$ on the far right-hand-side are the random distribution for sampling at $T$, where $p_T$ is usually the standard normal distribution. In real practices, we have $p_T=q_T$ such that $\mathcal{W}_2[p_T,q_T]=0$. It was left in the equation to give the most theoretically generalised result. Secondly, $p_0$ on the left-hand-side, is obtained from solving the following SDE:
+\begin{equation}
+    \label{eq:16.2}
+    d\xt=\Bigl[f_t(\xt)-g_t^2 \nabla_{\xt} \log p_t (\xt) \Bigr]dt +g_t dw,
+\end{equation}
+in the reversed order, starting from a random point $\x_T$ that is sampled from $p_T$. This is the target sample distribution that we would like to generate. On the other hand $q_0$ is the distribution obtained from solving the SDE:
+\begin{equation}
+    \label{eq:16.3}
+    d\xt=\Bigl[f_t(\xt)-g_t^2 s_{\theta}(\xt,t) \Bigr]dt +g_t dw,
+\end{equation}
+that starts from a random point sampled from $q_T$ to reach the corresponding distribution at $t=0$, in which $s_{\theta}(\xt,t)$ is a neural network approximation to the score function $\nabla_{\xt}p_t(\xt)$. As such, $q_0$ is the sample distribution that is generated from the diffusion generative model, and $\mathcal{W}_2 [p_0,q_0]$ represents the Wasserstein distance between the true and generated sample distributions. Lastly, the remainder is the integral term, in which the key part is the integrand:
+\begin{equation}
+    \label{eq:16.4}
+     \mathbb{E}_{\xt\sim p_t (\xt)} \Bigl[ \left\|\nabla_{\xt}\log p_{t}(\xt)-s_{\theta}(\xt,t)\right\|_2^2\Bigr],
+\end{equation}
+which is nothing but the ``score-matching'' loss for the diffusion generative model.
+
+the above result shows that, when we train the diffusion model with the score-matching loss, we have indirectly minimised the Wasserstein distance between the sample and the generated distributions. Differently from WGAN, the latter optimises $\mathcal{W}_{1}[p_0,q_0]$ distance, whereas here, the $\mathcal{W}_{2}[p_0,q_0]$ distance is optimised.
+
+\begin{myquote}
+\textbf{Note}: Strictly speaking, \cref{eq:16.4} is not the loss function for the diffusion model, the latter should really be the ``conditional score-matching'', and its relationship with score-matching is as following:
+\begin{align}
+    &\quad \mathbb{E}_{\xt\sim p_t(\xt)}\Bigl[\left\| \nabla_{\xt}\log p_{t}(\xt)-s_{\theta}(\xt,t) \right\|_2^2 \Bigr]\nonumber\\
+    &=\mathbb{E}_{\xt\sim p_t(\xt)} \Biggl[ \left\| \mathbb{E}_{\x_0\sim p_t (\x_0|\x_t)} \Bigl[\nabla_{\xt}\log p_t(\xt|\x_0) \Bigr]- s_{\theta}(\xt,t) \right\|_2^2 \Biggr]\nonumber\\
+    &\leq \mathbb{E}_{\xt\sim p_t(\xt)} \mathbb{E}_{\x_0\sim p_t (\x_0|\x_t)} \Bigl[\left\| \nabla_{\xt}\log p_{t}(\xt|\x_0)-s_{\theta}(\xt,t) \right\|_2^2 \Bigr]\label{eq:16.5}\\
+    &=\mathbb{E}_{\x_0\sim p_0(\x_0),\xt\sim p_t(\xt|\x_0)} \Bigl[\left\| \nabla_{\xt}\log p_{t}(\xt|\x_0)-s_{\theta}(\xt,t) \right\|_2^2 \Bigr],\nonumber
+\end{align}
+in which the last line corresponds to the conditional score-matching loss function for the diffusion generative model. The first equality holds because $\nabla_{\xt}\log p_{t}(\xt)=\mathbb{E}_{\x_0\sim p_t (\x_0|\x_t)} [\nabla_{\xt}\log p_t(\xt|\x_0)]$. The second inequality is based on the Jansen's inequality. Finally, the third equation is from the Bayesian formula. This implies that the conditional score-matching is the upper limit to score-matching, therefore, it should also be the upper limit to the Wasserstein distance.
+\end{myquote}
+
+From \cref{eq:16.1}, we can also better rationalise why we need to drop the coefficients before the modulus in the target function for training the diffusion model. Here, the Wasserstein distance is a well-defined metric for measuring the similarity between the two probability distribution functions, while $g_t^2I_t$ in \cref{eq:16.1} is a monotonically increasing function of $t$. This means that we need to properly increase the score-matching loss when $t$ is small. In \cref{sect_5:SDE}, we had derived the final form of the score-matching loss being
+\begin{equation}
+    \label{eq:16.6}
+    \frac{1}{\betatbar^2}\mathbb{E}_{\x_0\sim\tilde{p}_0(\x_0)}\Bigl[\left\| \bm{\varepsilon}_\theta \left(\alphatbar \x_0+\betatbar\varepsilon,t\right)-\bm{\varepsilon} \right\|_2^2\Bigr].
+\end{equation}
+Ignoring the coefficient $1/\betatbar^2$ is equivalent to multiplying the loss function with $\betatbar^2$, which is also a monotonically increasing function of $t$. As such, for simplicity, we can consider ignoring the coefficient is an approach to make it closer to the Wasserstein distance between the two probability distributions.
+
+\subsection{Preparatory works}
+
+Although the original article has provided the proof for \cref{eq:16.1}, it requires many prerequisite knowledges such as the continuity equation, gradient flow, and so on. Especially it used one theory without proof, which as hidden in the Chapter 8 of a monograph on  gradient flow, or Chapter 5 of a monograph on the optimum transport theory, which was too difficult for the author to  understand. After some trial, the author had finally arrived a (partial) proof of \cref{eq:16.1}, which only requires the usage of the definition for the Wasserstein distance, fundamentals of differential equations and the Cauchy inequality. This is much simpler than the original proof. After some modifications and improvements, it is presented as follows.
+
+Before proceeding to the proof, let us first make some preparations, which we shall summarise the basic concepts and conclusions that we need to apply subsequently. Firstly,  the Wasserstein distance is defined as 
+\begin{equation}
+    \label{eq:16.7}
+    \mathcal{W}_{\rho}[p,q]=\left( \inf_{\gamma\in\Pi[p,q]}\iint\gamma(\bm{x},\bm{y})\|\bm{x}-\bm{y}\|^\rho d\bm{x}d\bm{y}\right)^{\frac{1}{\rho}},
+\end{equation}
+in which $\Pi[p,q]$ is the probability density function for all the joint probability distributions in which $p$, $q$ are the corresponding marginal distributions. It describes the concrete proposals for the transportation of masses between the two distributions. 
+
+Here, we will only  consider the case in which $\rho=2$, which is the only case that gives a simple derivation in what follows. Note that in the above definition for the Wasserstein distance, it includes the computation of the definitive lower bound (inf). This implies that, for any $\gamma\in\Pi[p,q]$ that we can find, we will always have
+\begin{equation}
+    \label{eq:16.8}
+    \mathcal{W}_{2}[p,q]\leq \left( \iint\gamma(\bm{x},\bm{y})\|\bm{x}-\bm{y}\|^2 d\bm{x}d\bm{y}\right)^{\frac{1}{2}}.
+\end{equation}
+This is the key behind our proof here. To prove this bound, we shall be applying the Cauchy inequality:
+\begin{align}
+    \mbox{in vector form}\qquad &\bm{x}\cdot\bm{y}\leq \|\bm{x}\|\cdot \|\bm{y}\|, \nonumber \\
+    \mbox{in the form of expectation}\qquad & \mathbb{E}_{\x}[f(\x)\cdot g(\x)]\leq \left(\mathbb{E}_{x}[f^2(\x)]\right)^{\frac{1}{2}}\cdot\left(\mathbb{E}_{x}[g^2(\x)]\right)^{\frac{1}{2}}. \label{eq:16.9}
+\end{align}
+Additionally, in the following proof, we will also assume that the function $g_t (\x)$ satisfies the single-sided Lipschitz constraint defined as
+\begin{equation}
+    \label{eq:16.10}
+    \Bigl(g_t(\bm{x})-g_t(\bm{y}) \Bigr)\cdot(\bm{x}-\bm{y})\leq \mathcal{L}_t\|\bm{x}-\bm{y}\|^2,
+\end{equation}
+which is a weaker version of the usual Lipschitz constraint, \emph{i.e.} a function that satisfies the full Lipschitz constraint should also satisfy the single-sided Lipschitz constraint. Basically this will give a more appropriate definition of the Wasserstein distance and stable gradient during model training.
+
+\subsection{The initial trial}
+\marginnote{\textcolor{red}{\footnotesize{Whilst the proof here seems not too challenge to understand, it does take a lot of inspirations to come up with such a proof!}}}
+\cref{eq:16.1} is an overly generalised result, analysing which will not help us in rationalising and understanding the meaning behind. Therefore, we must first simplify the problem to see whether we can prove a weaker result. How should we simplify the problem? First of all, \cref{eq:16.1} considered the differences in the prior distributions ($p_T$ and $q_T)$, which we shall consider them as being identical to each other. Secondly, the reverse process underpinning the derivation of \cref{eq:16.1} was based on an SDE [\cref{eq:16.2}], which we shall first consider a definitive transformation that is described by an ODE.
+
+More specifically, let us consider a sample $\bm{z}$ that is drawn from the distribution $q(\bm{z})$ at $t=T$, which we shall treat it as our initial value, and then we shall let it evolve along trajectories defined by two different ODEs:
+\begin{equation}
+    \label{eq:16.11}
+    \frac{d\xt}{dt}=f_t(\xt)\qquad \frac{d\bm{y}_t}{dt}=g_t(\bm{y}_t).
+\end{equation}
+Assuming that, at any given time $t$, the distributions of $\xt$ and $\bm{y}_t$ are $p_t$ and $q_t$, respectively. We shall try to estimate an upper bound for $\mathcal{W}_2[p_0,q_0]$.
+
+Since both $\xt$ and $\bm{y}_t$ are evolved from the same initial value of $\bm{z}$ with respect to their own ODEs, therefore, they are both well-defined functions of $\bm{z}$, which should be more precisely denoted as $\xt(\bm{z})$ and $\bm{y}_t(\bm{z})$, but we have omitted $\bm{z}$ for brevity. This means that, for a given $\x$, $\xt\leftrightarrow\bm{y}_t$ establishes a transport pathway between $p_t$ and $q_t$. As such, based on \cref{eq:16.8}, we can write
+\begin{equation}
+\label{eq:16.12}
+    \mathcal{W}_2^2[p_t,q_t]\leq \mathbb{E}_{\bm{z}}\left[\|\xt-\bm{y}_t\|_2^2 \right]\triangleq \tilde{\mathcal{W}}_2^2[p_t,q_t].
+\end{equation}
+Now we shall try to find the bound for $\tilde{\mathcal{W}}_2^2[p_t,q_t]$. In order to link it with $f_t(\xt)$ and $g_t(\bm{y}_t)$, we shall take the derivative of $\tilde{\mathcal{W}}_2^2[p_t,q_t]$ with respect to $t$:
+\begin{align}
+\pm\frac{d\left(\tilde{\mathcal{W}}_2^2[p_t,q_t]\right)}{dt}&=\pm 2\mathbb{E}_{\bm{z}}\left[(\xt-\bm{y}_t)\cdot\left(\frac{d\xt}{dt}-\frac{d\bm{y}_t}{dt}\right)\right]\nonumber\\
+    &=\pm 2\mathbb{E}_{\bm{z}}\left[(\xt-\bm{y}_t)\cdot\left( f_t(\xt)-g_t(\bm{y}_t)\right) \right]\nonumber\\
+    &= \pm 2\mathbb{E}_{\bm{z}}\underbrace{\left[(\xt-\bm{y}_t)\cdot\left( f_t(\xt)\textcolor{red}{-g_t(\xt)}\right)\right]}_{\mbox{\scriptsize{Cauchy inequality (vector form)}}} \pm 2\mathbb{E}_{\bm{z}}\underbrace{\left[(\xt-\bm{y}_t)\cdot\left( \textcolor{red}{g_t(\xt)}-g_t(\bm{y}_t)\right)\right]}_{\mbox{\scriptsize{Lipschitz constraint}}}\nonumber\\
+    &\leq  2\mathbb{E}_{\bm{z}}\Bigl[\|\xt-\bm{y}_t\|\cdot \|f_t(\xt)-g_t(\xt)\| \Bigr] + 2\mathbb{E}_{\bm{z}} \Bigl[\mathcal{L}_t \|\xt-\bm{y}_t\|^2 \Bigr] \label{eq:16.13}\\
+    &\leq 2 \left(\mathbb{E}_{\bm{z}}\left[ \|\x_t-\bm{y}_t\|^2\right]^2 \right)^{\frac{1}{2}}\left(\mathbb{E}_{\bm{z}}\left[ \|f_t(\x_t)-g_t(\bm{y}_t)\|^2\right]^2 \right)^{\frac{1}{2}} + 2\mathbb{E}_{\bm{z}} \Bigl[\mathcal{L}_t \|\xt-\bm{y}_t\|^2 \Bigr]\nonumber\\
+    &=2\tilde{\mathcal{W}}_2[p_t,q_t]\left(\mathbb{E}_{\bm{z}}\left[ \|f_t(\x_t)-g_t(\bm{y}_t)\|^2\right]^2 \right)^{\frac{1}{2}} +2\mathcal{L}_t\tilde{\mathcal{W}}_2^2[p_t,q_t],\nonumber
+\end{align}
+in which, to derive the first inequality, we need to use the vector form of the Cauchy inequality and the Lipschitz constraint [\cref{eq:16.10}], and we applied the expectation form of the Cauchy inequality in deriving the second inequality. The $\pm$ sign implies that the final inequality will hold regardless of whether we take the $+$ or $-$ sign. In what follows, we take the results from the $-$ side. Using the fact that $(w^2)'=2ww'$, in which $w$ on both sides of the equation cancel out each other, we get
+\begin{equation}
+    \label{eq:16.14}
+    -\frac{d\left(\tilde{\mathcal{W}}_2[p_t,q_t]\right)}{dt}\leq \left(\mathbb{E}_{\bm{z}}\left[ \|f_t(\x_t)-g_t(\bm{y}_t)\|^2_2\right]^2 \right)^{\frac{1}{2}} + \mathcal{L}_t\tilde{\mathcal{W}}_2[p_t,q_t].
+\end{equation}
+Using the variation of parameters, let us further assume that $\tilde{\mathcal{W}}_2[p_t,q_t]=C_t \exp\left(\int_t^T \mathcal{L}_s ds \right)$, and substitute this into the equation above, we get 
+\marginnote{\footnotesize{\textcolor{red}{Not sure how the $\mathcal{L}_t$ term in \cref{eq:16.14} becomes eliminated here?}}}
+\begin{equation}
+    \label{eq:16.15}
+    -\frac{d C_t}{dt}\leq \exp\left(-\int_t^T \mathcal{L}_s ds \right) \left(\mathbb{E}_{\bm{z}}\left[ \|f_t(\x_t)-g_t(\bm{y}_t)\|^2_2\right]^2 \right)^{\frac{1}{2}}.
+\end{equation}
+Integrating both sides over the interval $[0,T]$, and using the initial condition $C_T=0$ (identical prior distributions with distance between them being zero), we get:
+\begin{equation}
+    \label{eq:16.16}
+    C_0\leq \int_0^T \exp\left(-\int_t^T \mathcal{L}_s ds \right) \left(\mathbb{E}_{\bm{z}}\left[ \|f_t(\x_t)-g_t(\bm{y}_t)\|^2_2\right]^2 \right)^{\frac{1}{2}} dt, 
+\end{equation}
+as such,
+\marginnote{\footnotesize{\textcolor{red}{This bit is also a bit puzzling.}}}
+\begin{equation}
+    \label{eq:16.17}
+    \tilde{\mathcal{W}}_2[p_0,q_0]\leq C_0\exp\left(\int_0^T\mathcal{L}_{s}ds\right)=\int_0^T I_t\left(\mathbb{E}_{\bm{z}}\left[ \|f_t(\x_t)-g_t(\bm{y}_t)\|^2_2\right]^2 \right)^{\frac{1}{2}} dt,
+\end{equation}
+in which $I_t=\exp\left(\int_0^t\mathcal{L}_s ds\right)$. According to \cref{eq:16.12}, this is also the upper limit for $\mathcal{W}_2[p_0,q_0]$. Finally, since the expectation value is a function of $\xt$ and $\xt$ is a function of $\bm{z}$, therefore, the expectation value taken over $\bm{z}$ is equivalent to the expectation value over $\xt$, such that,
+\begin{equation}
+    \label{eq:16.18}
+    \tilde{\mathcal{W}}_2[p_0,q_0]\leq \int_0^T I_t\left(\mathbb{E}_{\xt\sim p_t(\xt)}\left[ \|f_t(\x_t)-g_t(\bm{y}_t)\|^2_2\right]^2 \right)^{\frac{1}{2}} dt.
+\end{equation}
+
+\subsection{Continuing the proof}
+As a matter of fact, the simplified version shown in the above inequality (\ref{eq:16.18}) does not have a fundamental difference compared to the more generalised form of (\ref{eq:16.1}). Its derivation has already included all the general ideas behind the full derivation of the generalised result. Now let us finalise the remaining part of the proof.
+
+First, we need to generalise \cref{eq:16.18} to the case where the initial (prior) distributions are different from each other. Assuming that the two prior distributions are $p_T(\bm{z}_1)$ and $q_T(\bm{z}_2)$, we sample the initial value from $p_T(\bm{z}_1)$ to evolve $\xt$, and from $q_T(\bm{z}_2)$ to evolve $\bm{y}_t$. As such, $\xt$ and $\bm{y}_t$ are functions of $\bm{z}_1$ and $\bm{z}_2$, respectively, not the function of an identical $\bm{z}$ as we assumed before. In this case, we cannot straight away build a single transport protocol, but also need another transport protocol between $\bm{z}_1$ and $\bm{z}_2$. Let us choose the optimum transport protocol $\gamma^{*}(\bm{z}_1,\bm{z}_2)$ between the two distributions of $p_T(\bm{z}_1)$ and $q_T(\bm{z}_2)$. Similar to \cref{eq:16.12}, we now have
+\begin{equation}
+\label{eq:16.19}
+    \mathcal{W}_2^2[p_t,q_t]\leq \mathbb{E}_{\bm{z}_1,\bm{z}_2\sim\gamma^{*}(\bm{z}_1,\bm{z}_2)}\left[\|\xt-\bm{y}_t\|_2^2 \right]\triangleq \tilde{\mathcal{W}}_2^2[p_t,q_t].
+\end{equation}
+Because we did not change the definitions, except the expectation from $\mathbb{E}_{\bm{z}}$ to $\mathbb{E}_{\bm{z}_1,\bm{z}_2}$, both the procedure shown in \cref{eq:16.13} and the inequalities (\ref{eq:16.14}) and (\ref{eq:16.15}) still hold. However, when we take the integral over $[0,T]$ on both sides of (\ref{eq:16.15}), we no longer have $C_T=0$, but $C_T=\tilde{\mathcal{W}}_2[p_T,q_T]=\mathcal{W}_2[p_T,q_T]$, so the final result is 
+\begin{equation}
+    \label{eq:16.20}
+    \tilde{\mathcal{W}}_2[p_0,q_0]\leq  \int_0^T I_t\left(\mathbb{E}_{\xt\sim p_t(\xt)}\left[ \|f_t(\x_t)-g_t(\bm{y}_t)\|^2_2\right]^2 \right)^{\frac{1}{2}} dt +I_T\mathcal{W}_2[p_T,q_T].
+\end{equation}
+
+At this point, let us return to the diffusion model. In \cref{sect:6}, we have shown that, for a given forward process, it has a \emph{set} of corresponding reverse processes that are described by the following SDE:
+\begin{equation}
+    \label{eq:16.21}
+    d\x=\left(f_t(\xt)-\frac{1}{2}\left(g_t^2+\sigmat^2\right)\nabla_{\xt}\log p_t(\xt) \right)dt+\sigmat dw,
+\end{equation}
+in which $\sigmat$ is a time-dependent function of standard deviation that we are free to choose, and \cref{eq:16.2} corresponds to the case where $\sigmat=g_t$. As we have only considered ODE above, we will consider the case in which $\sigmat=0$. In this case, (\ref{eq:16.20}) still holds. What we only need to do is to change $f_t(\xt)$ into $f_t(\xt)-\frac{1}{2}g_t^2\nabla_{\xt}\log p_t(\xt)$ and change $g_t(\xt)$ into $f_t(\xt)-\frac{1}{2}g_t^2 s_{\theta}(\xt,t)$. Substituting these back into \cref{eq:16.20}, we recover the result (\ref{eq:16.1}) shown at the beginning. Of course, do not forget that the single-sided Lipschitz constraint (\ref{eq:16.10}) that we must impose on $g_t(\xt)$, which now we could further elaborate our assumption on $f_t(\xt)$ and $s_\theta (\xt,t)$, which we will not discuss these results here.
+
+\subsection{Further generalisation and its difficulties}
+
+Supposedly, we should carry on the work and finish the proof for the case where $\sigmat\neq 0$. Unfortunately, the idea presented in this section cannot be fully generalised to the case of SDE, which we shall provide some analysis on why this is the case in what follows. As a matter of face, for most readers, it should be sufficient to understand the case of ODE-based derivation, the full details for SDE case are not that critically important.
+
+For simplicity, let us take \cref{eq:16.2} as an example. What we need to do is to estimate the difference between the distributions for the evolving trajectories as described by the following two SDEs:
+\begin{equation}
+    \label{eq:16.22}
+    \begin{cases}
+    d\xt=\Bigl[ f_t(\xt)-g_t^2\nabla_{\xt}\log p_t (\xt)\Bigr]dt + g_t dw\\
+    d\bm{y}_t=\Bigl[ f_t(\bm{y}_t)-g_t^2 s_\theta (\bm{y}_t,t)\Bigr]dt+g_t dw.
+    \end{cases}
+\end{equation}
+In another word, we want to know how much the final distribution will  change if we replace the accurate score function $\nabla_{\xt}\log p_t (\xt)$ by the estimate $s_\theta (\bm{y}_t,t)$. We use the same idea of transforming the SDE into an ODE first, from which we can reuse the proof before. According to \cref{eq:16.21}, we know that the corresponding ODE to the first SDE is 
+\begin{equation}
+    \label{eq:16.23}
+    d\xt=\left[ f_t(\xt)-\frac{1}{2}g_t^2\nabla_{\xt}\log p_t (\xt)\right]dt.
+\end{equation}
+Deriving the ODE for the second SDE is a bit tricky, which we need to first change it into the form of $-g_t^2\nabla_{\bm{y}_t}\log g_t(\bm{y}_t)$ before applying \cref{eq:16.21}:
+\begin{align}
+    d\bm{y}_t &=\left[ \underbrace{f_t(\bm{y}_t)-g_t^2 s_\theta(\bm{y}_t,t)+g_t^2\nabla_{\bm{y}_t}\log q_t(\bm{y}_t)}_{\mbox{\scriptsize{treat as a whole}}} -  g_t^2\nabla_{\bm{y}_t}\log q_t(\bm{y}_t)\right]dt+g_t dw\nonumber\\
+     &=\left[f_t(\bm{y}_t)-g_t^2 s_\theta(\bm{y}_t,t)+g_t^2\nabla_{\bm{y}_t}\log q_t(\bm{y}_t) -\frac{1}{2}g_t^2\nabla_{\bm{y}_t}\log q_t(\bm{y}_t) \right]dt \nonumber\\
+     &=\left[f_t(\bm{y}_t)-g_t^2 s_\theta(\bm{y}_t,t)+\frac{1}{2}g_t^2\nabla_{\bm{y}_t}\log q_t(\bm{y}_t) \right]dt. \label{eq:16.24}
+\end{align}
+Repeat the process shown in \cref{eq:16.13} for the above two ODEs, then the major difference is that we now have an extra term:
+\begin{equation}
+    \label{eq:16.25}
+    -\frac{1}{2}g_t^2\mathbb{E}_{\bm{z}}\Bigl[ (\xt-\bm{y}_t)\left( \nabla_{\xt}p_t(\xt)-\nabla_{\bm{y}_t}\log q_t(\bm{y}_t)\right) \Bigr].
+\end{equation}
+If this term is negative, then the result from \cref{eq:16.13}  will still hold. So the key question is whether we can prove the following:
+\begin{equation*}
+    \label{eq:16.26}
+    \mathbb{E}_{\bm{z}}\Bigl[ (\xt-\bm{y}_t)\left( \nabla_{\xt}p_t(\xt)-\nabla_{\bm{y}_t}\log q_t(\bm{y}_t)\right) \Bigr]\geq 0.
+\end{equation*}
+However, we could prove that this does not generally hold with specific examples. In the original article, a similar term has also appeared, except that the expectation value was taken over the transport proposals between $\xt$ and $\bm{y}_t$. The article has provided a simple proof, but for the newcomers with limited knowledge on the optimum transport  theory, we can only stop here.
+
+More specifically, we cannot impose the single-sided Lipschitz constraint over the score functions, as we can easily find examples where the constraint is violated. As such, to prove the above inequality, we can only follow the methodology provided in the original article, without imposing other constraints but obeying the properties of the data distributions.

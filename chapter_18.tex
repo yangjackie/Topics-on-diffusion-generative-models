@@ -1,0 +1,87 @@
+\section{Score-Matching $=$ Conditional Score-Matching}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9509}}}
+
+In the previous discussions, we have encountered the terms ``\textit{score-matching}'' and ``\textit{conditional score-matching}'' multiple times. These are the concepts that appear frequently in the literature of diffusion and energy models. Particularly in many articles where the training targets for the diffusion models were based on the ``score-matching'', but for all the mainstreamed diffusion models, such as DDPM, the training target is actually established based on the conditional score-matching.
+
+Therefore, what is the relationship between ``\textit{score-matching}'' and ``\textit{conditional score-matching}''? Are they equivalent to each other? This section will try to answer these questions in details.
+
+\subsection{Score-matching}
+
+First of all, score-matching refers to the following target function for model training:
+\begin{equation}
+\label{eq:18.1}
+    \mathbb{E}_{\xt\sim p_t(\xt)}\Bigl[\left\| \nabla_{\xt}\log p_t(\xt)-s_\theta(\xt,t)\right\|_2^2 \Bigr],
+\end{equation}
+in which $\theta$ are the learnable parameters. Obviously, the objective of score-function is to train a model $s_\theta(\xt,t)$ to approximate $\nabla_{\xt}\log p_t(\xt)$, in which we call call the term $\nabla_{\xt}\log p_t(\xt)$ as the \textit{score}.
+
+In the diffusion generative model, $p_t(\xt)$ is given by the following expression:
+\begin{equation}
+    \label{eq:18.2}
+    p_t(\xt)=\int p_t(\xt|\x_0)p_0(\x_0)d\x_0=\mathbb{E}_{\x_0\sim p_0(\x_0)} [p_t(\xt|\x_0)].
+\end{equation}
+Here, $p_t(\xt|\x_0)$ is usually constructed as a simple distribution with analytical form (such as a conditional normal distribution). $p_0(\x_0)$ is a distribution that is fixed and given, which is usually the distribution of the training data, from which we can sample real data but its analytical form is generally unknown. From \cref{eq:18.2}, we can derive the following:
+\begin{align}
+    \nabla_{\xt}\log p_t(\xt) &=\frac{\nabla_{\xt}p_t(\xt)}{p_t(\xt)}\nonumber\\
+    &=\frac{\int \nabla_{\xt} p_t(\xt|\x_0)p_0(\x_0)d\x_0}{\int p_t(\xt|\x_0)p_0(\x_0)d\x_0}\label{eq:18.3}\\
+    &=\frac{\mathbb{E}_{\x_0\sim p_0(\x_0)} [\nabla_{\xt} p_t(\xt|\x_0)]}{\mathbb{E}_{\x_0\sim p_0(\x_0)} [p(\xt|\x_0)]}.\nonumber
+\end{align}
+Based on our assumption, both $\nabla_{\xt}p_t(\xt|\x_0)$ and $p_t(\xt|\x_0)$ have known analytical expressions, so in principle, we could estimate  $\nabla_{\xt}\log p_t(\xt)$ from sampling $\x_0$. However, this involves taking the quotient of two expectation values, which leads to a biased estimate in general. As such, one will need a large batch-size when training the model using \cref{eq:18.1} to overcome the bias in order to reach a better outcome.
+
+\subsection{Conditional score-matching}
+
+In reality, most diffusion models apply the following conditional score-matching as the training target:
+\begin{equation}
+    \label{eq:18.4}
+    \mathbb{E}_{\x_0,\xt\sim p_0(\x_0)p_t(\xt|\x_0)}\Bigl[ \left\|\nabla{\xt}\log p_t(\xt|\x_0)-s_\theta (\xt,t) \right\|_2^2\Bigr]
+\end{equation}
+Based on our assumptions, we have an analytical form for $\nabla{\xt}\log p_t(\xt|\x_0)$, so that above training target is practically computable, which requires sampling many pairs of $(\x_0,\xt)$ to estimate the target function. More importantly, this is an unbiased estimate, so its value is not strongly dependent upon the batch size, making it more workable in model training.
+
+In order to reveal the relationship between score-matching and conditional score-matching, we will also need another expression for the score function:
+\begin{align}
+    \nabla_{\xt}\log p_t(\xt) &= \frac{\nabla_{\xt}p_t(\xt)}{p_t(\xt)} \label{eq:18.5}\\
+    &=\frac{\int p_0 (\x_0)\nabla_{\xt} p_t(\xt|\x_0)d\x_0}{p_t(\xt)}\nonumber\\
+    &=\frac{\int p_0(\x_0) p_t(\xt|\x_0)\nabla_{\xt}\log p_{t}(\xt|\x_0)d\x_0}{p_t(\xt)}\nonumber\\
+    &=\int p_t(\x_0|\x_t)\nabla_{\xt}\log p_{t}(\xt|\x_0)d\x_0\nonumber\\
+    &=\mathbb{E}_{\x_0\sim p_t(\x_0|\x_t)}\Bigl[\nabla_{\xt}\log p_{t}(\xt|\x_0) \Bigr].\nonumber
+\end{align}
+
+\subsection{The inequality relationship}
+
+First of all, we can very quickly prove that the conditional score-matching is an upper bound for score-matching, meaning when we minimise the loss of conditional score-matching, we are also minimising the score-matching loss to some extent. This is not difficult to prove, which has already be demonstrated in \cref{sect_16}, which shall be represented as following:
+\begin{align}
+    &\quad \mathbb{E}_{\xt\sim p_t(\xt)}\Bigl[\left\| \nabla_{\xt}\log p_{t}(\xt)-s_{\theta}(\xt,t) \right\|_2^2 \Bigr]\nonumber\\
+    &=\mathbb{E}_{\xt\sim p_t(\xt)} \Biggl[ \left\| \mathbb{E}_{\x_0\sim p_t (\x_0|\x_t)} \Bigl[\nabla_{\xt}\log p_t(\xt|\x_0) \Bigr]- s_{\theta}(\xt,t) \right\|_2^2 \Biggr]\nonumber\\
+    &\leq \mathbb{E}_{\xt\sim p_t(\xt)} \mathbb{E}_{\x_0\sim p_t (\x_0|\x_t)} \Bigl[\left\| \nabla_{\xt}\log p_{t}(\xt|\x_0)-s_{\theta}(\xt,t) \right\|_2^2 \Bigr]\label{eq:18.6}\\
+    &=\mathbb{E}_{\x_0\sim p_0(\x_0),\xt\sim p_t(\xt|\x_0)} \Bigl[\left\| \nabla_{\xt}\log p_{t}(\xt|\x_0)-s_{\theta}(\xt,t) \right\|_2^2 \Bigr],\nonumber
+\end{align}
+in which the first equality comes from \cref{eq:18.5}, the second inequality is derived based on the Jansen's inequality. Finally, the last equality is from the Baye's rule.
+
+
+\subsection{The equality relationship}
+
+Here, we shall further prove that the difference between the conditional score-matching and score-matching is a term that is independent from the trainable parameters.
+
+To prove this, we start from score-matching, which we have 
+\begin{align}
+    &\quad \mathbb{E}_{\xt\sim p_t(\xt)}\Bigl[\left\| \nabla_{\xt}\log p_{t}(\xt)-s_{\theta}(\xt,t) \right\|^2 \Bigr]\nonumber\\
+    &=\mathbb{E}_{\xt\sim p_t(\xt)}\Bigl[ \|\nabla_{\xt}\log p_{t}(\xt)\|^2 +\|s_{\theta}(\xt,t) \|^2 -2s_{\theta}(\xt,t) \cdot \nabla_{\xt}\log p_{t}(\xt)\Bigr].\label{eq:18.7}
+\end{align}
+Whereas for the conditional score-matching, we have 
+\begin{align}
+   &\quad  \mathbb{E}_{\x_0,\xt\sim p_0(\x_0)p_t(\xt|\x_0)} \Bigl[\left\| \nabla_{\xt}\log p_{t}(\xt|\x_0)-s_{\theta}(\xt,t) \right\|^2 \Bigr]\nonumber \\
+   &=\mathbb{E}_{\x_0,\xt\sim p_0(\x_0)p_t(\xt|\x_0)} 
+   \Bigl[ \|\nabla_{\xt}\log p_{t}(\xt|\x_0)\|^2+ \|s_{\theta}(\xt,t)\|^2 -2 s_{\theta}(\xt,t)\cdot \nabla_{\xt}\log p_{t}(\xt|\x_0) \Bigr] \label{eq:18.8}
+   \\
+   &=\mathbb{E}_{\xt\sim p_t(\xt),\x_0\sim p(\x_0|\xt)} \Bigl[ \|\nabla_{\xt}\log p_{t}(\xt|\x_0)\|^2+ \|s_{\theta}(\xt,t)\|^2 -2 s_{\theta}(\xt,t)\cdot \nabla_{\xt}\log p_{t}(\xt|\x_0) \Bigr]\nonumber \\
+   &=\mathbb{E}_{\xt\sim p_t(\xt)}\Bigl[ \mathbb{E}_{\x_0\sim p(\x_0|\xt)}[\|\nabla_{\xt}\log p_t(\xt|\x_0)\|^2]+ \|s_\theta (\xt,t)\|^2\| \nonumber\\
+   &\qquad\qquad\qquad\qquad\qquad\qquad\qquad -2s_\theta (\xt,t)\cdot \mathbb{E}_{\x_0\sim p(\x_0|\xt)}[\|\nabla_{\xt}\log p_t(\xt|\x_0)\|^2]\Bigr] \nonumber\\
+   &=\mathbb{E}_{\xt\sim p_t(\xt)}\Bigl[ \mathbb{E}_{\x_0\sim p(\x_0|\xt)}[\|\nabla_{\xt}\log p_t(\xt|\x_0)\|^2]+ \|s_\theta (\xt,t)\|^2\| - 2s_\theta (\xt,t) \nabla_{\xt}\log p_t(\xt) \Bigr].\nonumber
+\end{align}
+Taking the difference between the two, the result is 
+\begin{equation}
+    \label{eq:18.9}
+    \mathbb{E}_{\xt\sim p_t(\xt)}\Bigl[ \mathbb{E}_{\x_0\sim p(\x_0|\xt)}[\|\nabla_{\xt}\log p_t(\xt|\x_0)\|^2] - \|\nabla_{\xt}\log p_{t}(\xt)\|^2\Bigr],
+\end{equation}
+which is independent from the training parameters. This means that minimising the target function  from conditional score-matching is fully equivalent to minimising the target function from score-matching. This result was first demonstrated in the article ``\emph{A Connection between Score Matching and Denoising Autoencoders}''\cite{vincent2011connection}.
+
+Since the two approaches are theoretically equivalent to each other, does it mean our previous claim that score-matching requires larger batch-size for training than the conditional score-matching  will not hold? This is not true. As estimating the score $\nabla_{\xt}\log p_{t}(\xt)$ using \cref{eq:18.3} for evaluating the score-matching loss function will still contain bias which needs to be overcome with the use of large batch-size. However, when we further expanded and simplified the target function [\cref{eq:18.1}], we have effectively changed the biased estimate into an unbiased one, making it less dependent on the batch size. This is saying, although the two training targets are theoretically equivalent, from a statistical point of view, they are two different statistical quantities and are only exactly equivalent to each other when the sample size approach infinity.
