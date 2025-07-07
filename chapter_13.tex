@@ -1,4 +1,5 @@
 \section{From the Law of Gravitational Force to Diffusion Model}
+\label{sect_13_gravity}
 \marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9305}}}
 
 For many readers, the diffusion generative model is probably the first deep-learning model that they have encountered, which has utilised so many different mathematical methods. In this series of articles, we have demonstrated the strong connection between the diffusion models and many different fields in mathematics, including mathematical analysis, probability theory, statistics, ordinary and stochastic partial differential equations. It is reasonable to say, even for researchers in the field of pure theory, such as mathematical physics, it will be very likely for them to find their skills useful in the development of diffusion generative models. 
@@ -91,6 +92,7 @@ we  can introduce a trainable function $s_\theta(\x,t)$ to learn $\bm{F}(\x,t)$ 
 \end{equation}
 However, we still need to perform sampling on $\x$ and $t$ in order to evaluate the above target function, and there is no clear definition on how this should be done. This is a major character behind PFGM, it defined the reverse generative process, without the need of defining the forward process. This one-step sampling is practically equivalent to the forward process. As such, the original paper considered an approach to construct samples of $\x$ and $t$ through perturbing each real sample as:
 \begin{equation}
+\label{eq:13.11}
     \x=\x_0+\|\bm{\varepsilon}_{\x}\|(1+\tau)^{m}\bm{u},\qquad t=\|\varepsilon_t\|(1+\tau)^{m},
 \end{equation}
 in which $(\bm{\varepsilon}_{\x},\varepsilon_t)\sim\mathcal{N}(0,\sigma^2\bm{I}_{(d+1)\times(d+1)})$ and $m\sim\mathcal{U}[0,M]$. $\bm{u}$ is the unit vector that distribute uniformly on the $d$-dimensional hypersphere. $\tau$, $\sigma$ and $M$ are all constants.
