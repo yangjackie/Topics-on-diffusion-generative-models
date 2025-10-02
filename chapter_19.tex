@@ -1,0 +1,117 @@
+\section{GAN and a Diffusion ODE}\label{sect_19}
+\marginnote{\footnotesize{Original blog post see \url{https://www.spaces.ac.cn/archives/9662}}}
+
+In \cref{sect_16}, we have derived an inequality between the score-matching loss and the Wasserstein distance. It was showed that, to a certain extent, the optimisation targets for the diffusion generative models and those for the WGAN are very similar. In this section, we will further discuss the key results from the article ``\emph{Monoflow: Rethinking Divergence GANs via the Perspective of Wasserstein Gradient Flow}''\cite{yi2024monoflow}, which demonstrated another subtle relationship between GAN and the diffusion generative models, whereby \emph{GAN can be considered as the diffusion ODE on another time dimension}!
+
+These discoveries show that, although GAN and diffusion models appear to be two completely different generative models, in fact, there exist many similarities between them, and we can borrow ideas from each other to facilitate the development of generative models in the future.
+
+\subsection{The basic ideas}
+
+As we know, the generator that is trained in a GAN model establishes a one-step deterministic transformation $g_{\bm{\theta}}(\bm{z})$ that transforms a noise $\bm{z}$ into a realistic sample. On the other hand, the distinct character of the diffusion model is its 'progressive generation', which corresponds to a procedure that samples from a series of slowly varying distributions $p_0(\x_0)$, $p_1(\x_1)$, $\cdots$, $p_T(\x_T)$. (Note that, in the diffusion models, we treat $\x_T$ as the noise, and $\x_0$ being the target sample. But to align with the following discussions, we shall treat them in the reverse order, in which $\x_0\to\x_T$ represents a transformation from the noise to the sample.) On the surface, there really is not much similarity between the two models, so how can we link them up together?
+
+
+Obviously, if we would like to understand GAN from the perspective of the diffusion model, we will need to think of a way to construct a series of continuously varying probability distributions. Although the generator $g_{\bm{\theta}}(\bm{z})$ itself is a one-shot transformation, in which the concept of `slowly varying distributions' does not apply, the optimisation process of the generator is, on the other hand, a slowly varying process! As such, would it be possible to use the trajectory of $\bm{\theta}$, which shall be denoted as $\bm{\theta}_t$, to construct these distributions? 
+
+More specifically, assume that the generator was initialised with $\bm{\theta}_0$, after $T$ steps of adversarial training, we shall obtain the optimised parameters $\bm{\theta}_T$, whereas the parameters along the training trajectory are $\bm{\theta}_1$, $\bm{\theta}_2$, $\cdots$, $\bm{\theta}_{T-1}$. In this case, if we define $\xt=g_{\bm{\theta}_t}(\bm{z})$, then equivalently, we would have correspondingly defined a series of gradually varying $\x_0$, $\x_1$, $\cdots$, $\x_T$, that are drawn from a series of slowly varying distributions $p_0(\x_0)$, $p_1(\x_1)$, $\cdots$, $p_T(\x_T)$. 
+
+If this concept is workable, then a GAN model can be effectively interpreted as a diffusion model on the dimension of an imaginary time that corresponds to the descending gradient of the parameters $\bm{\theta}_t$, and we shall try to investigate this further below.
+
+\subsection{The flow of gradient}
+
+First of all, we need to use an important result on the Wasserstein gradient flow, which shows that the following differential equation
+\begin{equation}
+    \label{eq:19.1}
+    \frac{\partial q_t(\x)}{\partial t}=-\nabla_{\x} \Big(q_t(\x)\nabla_{\x}\log r_t(\x)\Big),
+\end{equation}
+is effectively minimising the KL-divergence between $p(\x)$ and $q_t(\x)$, \emph{i.e.} $\lim\limits_{t\to\infty}q_t(\x)=p(\x)$, in which $r_t(\x)=\frac{p(\x)}{q_t(\x)}$. If $p(\x)$ represents the distribution of the real samples, and furthermore, assuming that we can easily sample from the distributions of $q_t(\x)$, then, when $t\to\infty$, we would be able to sample from the target distribution of $p(\x)$. More specifically, sampling from the distribution of $q_t(\x)$ may be achieved from the following ODE:
+\begin{equation}
+    \label{eq:19.2}
+    \frac{d\x}{dt}=\nabla_{\x} \log r_t(\x).
+\end{equation}
+However, generally, $r_t(\x)$ in the above ODE is unknown, such that we cannot directly sample $\x$ from it. Hence, we must first try to estimate $r_t(\x)$.
+
+\subsection{The discriminator}
+
+Now we can come back to examine the discriminator in GAN. Take the earliest vanilla GAN as an example, it has the following training target:
+\begin{equation}
+    \label{eq:19.3}
+    \max_{D}\mathbb{E}_{\x\sim p(\x)}\Big[\log \sigma(D(\x))\Big]+\mathbb{E}_{\x\sim q(\x)}\Big[\log \big(1-\sigma(D(\x))\big)\Big].
+\end{equation}
+Here, $D$ is the discriminator, $\sigma(t)=1/(1+e^{-t})$ is the sigmoid function, $p(\x)$ is the distribution of the real samples, and $q(\x)$ is the distribution of the fake samples. It is possible to prove that, the optimum solution for the discriminator from the above training target is 
+\begin{equation}
+    \label{eq:19.4}
+    D(\x)=\log\frac{p(\x)}{q(\x)}.
+\end{equation}
+For the more generalised f-GAN, the result will be slightly different, but it is possible to prove that the optimum theoretical solution for the discriminator is always a function of $\frac{p(\x)}{q(\x)}$. This means that, as long as we could perform sampling from the distributions of $p(\x)$ and $q_t(\x)$, then from the trained discriminator of a GAN based on \cref{eq:19.3}, we should be able to estimate $r_t(\x)=\frac{p(\x)}{q_t(\x)}$.
+
+\subsection{One step forward}
+
+Some readers may be puzzled, wouldn't the above argument fall into a chicken-and-egg dilemma? On one hand, we want to estimate $r_t(\x)$ in order to achieve sampling from $q_t(\x)$ using \cref{eq:19.2}. On the other hand, we assumed that one could sample from $q_t(\x)$ in order to estimate $r_t(\x)$. The beauty of this comes as follows: suppose now we have the generator $g_{\bm{\theta}_t}(\bm{z})$, its generative outcome is equivalent to sampling from the distribution of $g_t(\x)$, \emph{i.e.}
+\begin{equation}
+    \label{eq:19.5}
+    \Big\{g_{\bm{\theta}_t}(\bm{z})\Big\vert \bm{z}\sim\mathcal{N}(0,\bm{I})\Big\}=\Big\{\xt\Big\vert\xt\sim g_t(\x) \Big\}.
+\end{equation}
+This will allow us to compute $r_t(\x)$ in \cref{eq:19.3}. Pay attention that this is only for $r_t (\x)$ at time $t$, and we don't know $r_t (\x)$ at the other times. So, in principle, we cannot complete the final sampling process directly from \cref{eq:19.2}. Nevertheless, we could push a small step forward:
+\begin{equation}
+    \label{eq:19.6}
+    \x_{t+1}=\xt+\varepsilon\nabla_{\xt}\log r_t(\xt)=\xt+\varepsilon\nabla_{\xt}D(\xt),
+\end{equation}
+in which $\varepsilon$ is an infinitesimal positive number that represents the step size. Now we have the outcome from sampling the next step, which we want it also to be equivalent to the sampling outcome from the generator in the next step, \emph{i.e.}
+\begin{align}
+    \Big\{g_{\bm{\theta}_{t+1}}(\bm{z})\Big\vert \bm{z}\sim\mathcal{N}(0,\bm{I})\Big\}&= \Big\{\x_{t+1}\Big\vert\x_{t+1}\sim g_{t+1}(\x) \Big\} \nonumber\\
+    &=\Big\{ \x_{t+1}\Big\vert \xt+\varepsilon\nabla_{\xt}D(\xt) , \xt\sim q_t(\x)\Big\}. \label{eq:19.7}
+\end{align}
+In other words, we want to change the motion of the samples in the diffusion model into the motion of the parameters in the generator of GAN. To achieve this, we train the following loss to optimise $\bm{\theta}_{t+1}$:
+\begin{equation}
+    \label{eq:19.8}
+    \bm{\theta}_{t+1}=\argmin_{\bm{\theta}}\mathbb{E}_{\bm{z}\sim\mathcal{N}(0,\bm{I})}\Big[ \Vert g_{\bm{\theta}}(\bm{z})-g_{\bm{\theta}_t}(\bm{z})-\varepsilon \nabla_g D(g_{\bm{\theta}_t}(\bm{z})) \Vert_2^2 \Big].
+\end{equation}
+This is saying that, we first increment $\xt=g_{\bm{\theta}_t}(\bm{z})$ forward to reach $\x_{t+1}$, and hope that the corresponding outcome from $g_{\bm{\theta}_{t+1}}(\bm{z})$ is also sufficiently close to $\x_{t+1}$. After this, we start the new iteration by replacing $\bm{\theta}_t$ with the new $\bm{\theta}_{t+1}$, meaning that we iterate through \cref{eq:19.3} and \cref{eq:19.8} repetitively. Doesn't this look very similar to GAN?
+
+\subsection{The final touch}
+
+If the above derivations are not sufficient, we could further improve it to make it become closer to the GAN framework. Noticing that the gradient of the function, over which the expectation value is taken in \cref{eq:19.8}, can be computed as
+\begin{align}
+   &\quad\nabla_{\bm{\theta}} \Big\Vert g_{\bm{\theta}}(\bm{z})-g_{\bm{\theta}_t}(\bm{z})-\varepsilon \nabla_g D(g_{\bm{\theta}_t}(\bm{z})) \Big\Vert_2^2 \nonumber\\
+   &=2\Big\langle g_{\bm{\theta}}(\bm{z})-g_{\bm{\theta}_t}(\bm{z})-\varepsilon \nabla_g D(g_{\bm{\theta}_t}(\bm{z})),\nabla_{\bm{\theta}}g_{\bm{\theta}}(\bm{z})\Big\rangle.\label{eq:19.9}
+\end{align}
+Substituting in the current value of $\bm{\theta}_t$, the result is
+\begin{equation}
+\label{eq:19.10}
+-2\varepsilon\Big\langle \nabla_g D(g_{\bm{\theta}_t}(\bm{z})),\nabla_{\bm{\theta}_t}g_{\bm{\theta}_t}(\bm{z})  \Big\rangle = -2\varepsilon\nabla_{\bm{\theta}_t}D(g_{\bm{\theta}_t}(\bm{z})).
+\end{equation}
+This is saying that, if we only perform one step of optimisation based on the gradient of the loss function, then the loss function based on \cref{eq:19.8} is fully equivalent to the following loss function (since the gradient only differs by a constant coefficient):
+\begin{equation}
+    \label{eq:19.11}
+    \bm{\theta}_{t+1}=\argmin_{\bm{\theta}}\mathbb{E}_{\bm{z}\sim\mathcal{N}(0,\bm{I})}\Big[ -D(g_{\bm{\theta}}(\bm{z}))\Big].
+\end{equation}
+This is one of the common loss functions for training the generator. By training the model through minimising \cref{eq:19.3} and \cref{eq19.11} alternatively, it leads to a common variant of GAN. More specifically,in the original article, a more generic form for the loss function for training the generator was also given:
+\begin{equation}
+    \label{eq:19.12}
+    \bm{\theta}_{t+1}=\argmin_{\bm{\theta}}\mathbb{E}_{\bm{z}\sim\mathcal{N}(0,\bm{I})}\Big[ -h\Big(D(g_{\bm{\theta}}(\bm{z}))\Big)\Big],
+\end{equation}
+in which $h(\cdot)$ is any arbitrary monotonically increasing function. Correspondingly, in the Wasserstein gradient flow [\cref{eq:19.1}], we can change $\log r_t(\x)$ into $h(\log r_t(\x))$. This is probably the origin behind the name \emph{monoflow}. As for proving \cref{eq:19.12}, we shall not further discuss the details here. Interested readers may refer back to the original article.
+
+\subsection{The significance behind this work}
+In summary, to treat GAN as the diffusion model, we consider the following process:
+\begin{equation}
+    \cdots\to g_{\bm{\theta}_t}(\bm{z}) \xrightarrow{\mbox{\cref{eq:19.3}}} r_t(\x)\xrightarrow{\mbox{\cref{eq:19.6}}} \x_{t+1} \xrightarrow{\mbox{\cref{eq:19.8}}} g_{\bm{\theta}_{t+1}}(\bm{z})\to\cdots
+\end{equation}
+in which the key equation is \cref{eq:19.6}, which comes from \cref{eq:19.1} and \cref{eq:19.2} based on the Wasserstein gradient flow. 
+
+Some readers may ask, why we need to spend so much effort to understand GAN from this perspective if it has not led to something fundamentally new to the original GAN model? First of all, the author believes that, understanding GAN from the perspective of the diffusion generative model, or unifying GAN and the diffusion models, is an interesting and fun endeavour, which is its most important significance, even though this may not lead to any practical significance.
+
+Secondly, as the authors have already pointed out in their original paper, the theoretical derivations and the actual model training process for GAN are not fully consistent with each other. This is no longer the case if we try to understand GAN from the perspective of the diffusion model, which leads to a training process that is conceptually consistent with the model design. In other words, from the perspective of model training, the existing derivations for GAN were wrong, the right perspective is to treat it fundamentally similar to the diffusion model.
+
+How should we understand this? Taking the GAN model above as an example, the training targets for the discriminator and the generator are:
+\begin{equation}
+    \label{eq:19.13}
+    \max_{D}\mathbb{E}_{\x\sim p(\x)}\Big[ \log \sigma(D(\x))\Big]+\mathbb{E}_{\x\sim q(\x)}\Big[ \log(1-\sigma(D(\x)))\Big]
+\end{equation}
+\begin{equation}
+    \label{eq:19.14}
+    \min_{q}\mathbb{E}_{\x\sim q(\x)}\Big[-D(\bm{x})\Big]
+\end{equation}
+The nature way to prove these, is to prove that the optimum solution for $D$ is $\log\frac{p(\bm{x})}{q(\bm{x})}$, and substitute this result into the loss function of the generator, which shows that effectively, it is minimising the KL divergence between $p$ and $q$, such that the optimum solution is naturally $p(\x)=q(\x)$. However, the corresponding training procedure for this should be to first solve the $\max_{D}$ problem for any arbitrary $q(\x)$, which gives $D$ as a function of $q(\bm{x})$ or the parameters $\bm{\theta}$ for the generator, from which we proceed to the $\min_q$ step. This is different from the alternating training steps that switch periodically between the generator and discriminator. The latter is more consistent with the design of the diffusion model, which itself is alternative in nature, this leads more naturally to the model training process for GAN.
+
+Overall, understanding GAN from the perspective of the diffusion model is not only just a new way to understand GAN, but more importantly, a perspective that is more consistent with the model training process for GAN. For instance, we can now explain why training the GAN generator should not take too many steps, this is because \cref{eq:19.8} and \cref{eq:19.11} are equivalent to each other only when we take the single-shot optimisation, otherwise, one should really be using \cref{eq:19.8} as the training target.
